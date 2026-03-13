@@ -325,7 +325,7 @@ def check():
         if not tabs_data: return
         OUTPUT_DIR.mkdir(exist_ok=True)
         html = gen_html(tabs_data, fn)
-        out = OUTPUT_DIR / "dashboard.html"
+        out = OUTPUT_DIR / "index.html"
         with open(out, "w", encoding="utf-8") as f: f.write(html)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         with open(OUTPUT_DIR / ("dashboard_" + ts + ".html"), "w", encoding="utf-8") as f: f.write(html)
