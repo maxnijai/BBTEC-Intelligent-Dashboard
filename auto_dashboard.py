@@ -20,7 +20,7 @@ try:
 except ImportError:
     HAS_GOOGLE = False
 
-LOCAL_FOLDER = r"D:\Back Up Pending"
+LOCAL_FOLDER = "."
 GDRIVE_FOLDER_ID = "188bv1FhdU2A64wjJjkntkKFIGZG18nMJ"
 CHECK_INTERVAL = 5
 SCRIPT_DIR = Path(__file__).parent
