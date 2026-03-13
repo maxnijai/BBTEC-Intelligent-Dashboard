@@ -1,0 +1,964 @@
+const TABS=__DATA_PLACEHOLDER__;
+const AF=["6) Within SLA","5) OverSLA : < 1 day","4) OverSLA : < 3 days","3) OverSLA : < 7 days","2) OverSLA : < 30 days","1) OverSLA : > 30 days"];
+const AFC=["#16a34a","#86efac","#facc15","#f97316","#f87171","#991b1b"];
+const AFL=["SLA","<1d","<3d","<7d","<30d",">30d"];
+const AFT=["white","#1a1a1a","#1a1a1a","white","white","white"];
+const afC=a=>AFC[AF.indexOf(a)]||"#8896b0";
+const PRI_C=["#dc2626","#ea580c","#16a34a"];
+const PRI_L=["P0","P1","P2"];
+const PRI_N=["P0 เกิน >24h","P1 เกิน <24h","P2 ใน SLA"];
+const priC=p=>PRI_C[p]||"#8896b0";
+const THEMES={
+  calm:{name:"🌤️ Calm",bg:"#e8ecf2",s1:"#edf0f5",s2:"#e4e8f0",bd:"#cdd5e0",tx:"#2c3e50",mu:"#6b7d94",b:"#4a7bbd",cy:"#2a8fa8",rd:"#d44040",or:"#d48a2a",gn:"#2a9d5c",pu:"#7c5cbf",mapBg:"#d0dce8"},
+  warm:{name:"🌅 Warm",bg:"#ece8e2",s1:"#f0ece6",s2:"#e8e2dc",bd:"#d8d0c8",tx:"#3d3228",mu:"#8a7d70",b:"#5a80a8",cy:"#488890",rd:"#c44838",or:"#c87830",gn:"#3a8858",pu:"#7a60a8",mapBg:"#ddd5c8"},
+  slate:{name:"🌙 Slate",bg:"#1e2430",s1:"#262d3a",s2:"#2e3644",bd:"#3c4556",tx:"#d8dde6",mu:"#8894a6",b:"#6a9ed8",cy:"#5ab8c8",rd:"#e06060",or:"#d89848",gn:"#58b878",pu:"#9a80d0",mapBg:"#283848"},
+  midnight:{name:"🌌 Midnight",bg:"#101620",s1:"#161d2a",s2:"#1c2536",bd:"#2a3548",tx:"#cdd5e0",mu:"#728098",b:"#5090d0",cy:"#40a8c0",rd:"#d05050",or:"#c88838",gn:"#40a060",pu:"#8870c0",mapBg:"#1a2840"},
+};
+let X=THEMES.calm;
+const LOGO="data:image/png;base64,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QACEohIAAAAAAAAAAAAAAAAAAAAAAAAAABISCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAISiEgAAAAAAAAAAAAAAAAAAAAAAAAAAEhIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAhKISAAAAAAAAAAAAAAAAAAAAAAAAAAASEggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACEohIAAAAAAAAAAAAAAAAAAAAAAAAAABISCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAISiEgAAAAAAAAAAAAAAAAAAAAAAAAAAEhIIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAhKISAAAAAAAAAAAAAAAAAAAAAAAAAAASEggAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACEohIAAAAAAAAAAAAAAAAAAAAAAAAAABISCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAISiEgAAAAAAAAAAAAAAAAAAAAAAAAAAEgCBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICBICEgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/2Q==";
+
+const SB=({items,total,h=24})=>(<div style={{display:"flex",height:h,borderRadius:4,overflow:"hidden"}}>{items.filter(i=>i.v>0).map((it,i)=>(<div key={i} style={{width:`${Math.max(1.5,it.v/total*100)}%`,background:it.c,display:"flex",alignItems:"center",justifyContent:"center",fontSize:it.v>3?Math.min(10,h-6):0,fontWeight:700,color:it.tc||"white"}}>{it.v>2?it.v:""}</div>))}</div>);
+const KPI=({label,value,sub,color})=>(<div style={{background:X.s1,border:`1px solid ${X.bd}`,borderRadius:8,padding:"14px 16px",position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:0,left:0,right:0,height:3,background:color}}/><div style={{fontSize:10,color:X.mu,textTransform:"uppercase",letterSpacing:1,fontWeight:600,marginBottom:4}}>{label}</div><div style={{fontFamily:"'Inter',sans-serif",fontSize:24,fontWeight:800,color,margin:"2px 0",letterSpacing:"-0.5px"}}>{value}</div>{sub&&<div style={{fontSize:11,color:X.mu,marginTop:2}}>{sub}</div>}</div>);
+const Card=({title,dot,children,defaultOpen=true})=>{const[open,setOpen]=useState(defaultOpen);return(<div style={{background:X.s1,border:`1px solid ${X.bd}`,borderRadius:8,overflow:"hidden"}}>{title&&<div onClick={()=>setOpen(!open)} style={{fontSize:11,fontWeight:700,color:X.mu,textTransform:"uppercase",letterSpacing:1,padding:"12px 18px",borderBottom:open?`1px solid ${X.bd}`:"none",display:"flex",alignItems:"center",gap:8,cursor:"pointer",userSelect:"none"}}><span style={{width:8,height:8,borderRadius:"50%",background:dot||X.b}}/><span style={{flex:1}}>{title}</span><span style={{fontSize:14,color:X.mu,transition:"transform 0.2s",transform:open?"rotate(0)":"rotate(-90deg)"}}>{open?"▼":"▶"}</span></div>}{open&&<div style={{padding:"16px 18px"}}>{children}</div>}</div>);};
+const Bar=({val,max,color,h=8})=>(<div style={{height:h,background:X.s2,borderRadius:h/2,overflow:"hidden",flex:1}}><div style={{height:"100%",width:`${Math.min(100,val/max*100)}%`,background:color,borderRadius:h/2}}/></div>);
+const AfLeg=()=>(<div style={{display:"flex",gap:8,fontSize:9,color:X.mu,flexWrap:"wrap"}}>{AF.map((a,i)=>(<span key={i} style={{display:"flex",alignItems:"center",gap:3}}><span style={{width:8,height:8,borderRadius:2,background:AFC[i]}}/>{AFL[i]}</span>))}</div>);
+const afSB=(d,t,h=24)=>(<SB items={AF.map((k,i)=>({v:d[k]||0,c:AFC[i],tc:AFT[i]}))} total={t} h={h}/>);
+
+// Map
+const LN=15.2,LX=20.8,ON=97.0,OX=102.0;
+const lm=l=>Math.log(Math.tan(Math.PI/4+(l*Math.PI/180)/2));
+const mN=lm(LN),mX=lm(LX),W=800,H=600;
+const tX=o=>((o-ON)/(OX-ON))*W;
+const tY=l=>(1-(lm(l)-mN)/(mX-mN))*H;
+const PV=[{n:"เชียงราย",p:[[99.5,20.4],[100.8,20.3],[100.9,19.6],[100.1,19.3],[99.3,19.5],[99.0,20.0]]},{n:"เชียงใหม่",p:[[98.0,19.8],[99.0,20.0],[99.3,19.5],[99.5,19.0],[99.4,18.3],[98.8,18.1],[98.0,18.3],[97.8,19.0]]},{n:"แม่ฮ่องสอน",p:[[97.4,19.8],[98.0,19.8],[97.8,19.0],[98.0,18.3],[97.8,17.8],[97.4,17.6],[97.2,18.5]]},{n:"ลำพูน",p:[[98.8,18.1],[99.4,18.3],[99.3,18.0],[99.0,17.8]]},{n:"ลำปาง",p:[[99.3,19.5],[100.1,19.3],[100.2,18.8],[100.0,18.2],[99.3,18.0],[99.4,18.3],[99.5,19.0]]},{n:"พะเยา",p:[[100.1,19.3],[100.8,19.5],[100.6,19.0],[100.2,18.8]]},{n:"น่าน",p:[[100.8,19.5],[100.8,20.3],[101.4,19.8],[101.3,18.8],[100.8,18.5],[100.6,19.0]]},{n:"แพร่",p:[[100.0,18.2],[100.2,18.8],[100.6,19.0],[100.8,18.5],[100.5,17.9],[100.0,18.0]]},{n:"อุตรดิตถ์",p:[[100.5,17.9],[100.8,18.5],[101.3,18.8],[101.2,17.8],[100.8,17.4],[100.5,17.5]]},{n:"ตาก",p:[[97.8,17.8],[98.8,18.1],[99.0,17.8],[99.3,17.2],[99.5,16.5],[99.2,15.8],[98.5,15.6],[97.9,16.0],[97.5,16.8]]},{n:"สุโขทัย",p:[[99.3,17.2],[100.0,17.4],[100.2,17.0],[99.8,16.8],[99.5,16.5]]},{n:"พิษณุโลก",p:[[100.0,17.4],[100.5,17.5],[100.8,17.4],[101.0,17.0],[100.8,16.5],[100.2,16.5],[100.2,17.0]]},{n:"กำแพงเพชร",p:[[99.2,15.8],[99.5,16.5],[99.8,16.8],[100.2,16.5],[100.0,15.8],[99.5,15.5]]},{n:"พิจิตร",p:[[100.2,16.5],[100.8,16.5],[100.6,16.0],[100.2,15.8],[100.0,15.8]]},{n:"เพชรบูรณ์",p:[[100.8,17.4],[101.2,17.8],[101.5,17.0],[101.7,16.5],[101.3,16.0],[100.8,16.0],[100.8,16.5],[101.0,17.0]]}];
+const pp=pts=>pts.map((p,i)=>`${i===0?"M":"L"}${tX(p[0])},${tY(p[1])}`).join(" ")+"Z";
+const cn=pts=>[pts.reduce((s,p)=>s+p[0],0)/pts.length,pts.reduce((s,p)=>s+p[1],0)/pts.length];
+
+const TMap=({coords,districts,onDotClick})=>{
+  const[hov,setHov]=useState(null);
+  const[showStorm,setShowStorm]=useState(true);
+  const[vb,setVb]=useState({x:0,y:0,w:W,h:H});
+  const[drag,setDrag]=useState(null);
+  if(!coords||!coords.length) return <div style={{color:X.mu,padding:20}}>No coordinates</div>;
+  const dists=(districts||[]).filter(d=>d.lat&&d.lon&&d.name!=="ไม่ระบุ");
+  const stormHigh=[
+    {n:"แม่ฮ่องสอน",lat:19.3,lon:97.9},{n:"เชียงใหม่",lat:18.8,lon:98.9},{n:"เชียงราย",lat:19.9,lon:99.8},
+    {n:"ลำพูน",lat:18.6,lon:99.0},{n:"ตาก",lat:16.9,lon:99.1}
+  ];
+  const stormMed=[
+    {n:"ลำปาง",lat:18.3,lon:99.5},{n:"พะเยา",lat:19.2,lon:100.2},{n:"แพร่",lat:18.1,lon:100.1},
+    {n:"น่าน",lat:18.8,lon:100.8},{n:"อุตรดิตถ์",lat:17.6,lon:100.1},{n:"สุโขทัย",lat:17.0,lon:99.8},
+    {n:"กำแพงเพชร",lat:16.5,lon:99.5},{n:"พิษณุโลก",lat:16.8,lon:100.3},{n:"เพชรบูรณ์",lat:16.4,lon:101.2}
+  ];
+  const zoom=(factor)=>{
+    setVb(v=>{
+      const nw=Math.max(100,Math.min(W,v.w*factor));
+      const nh=Math.max(75,Math.min(H,v.h*factor));
+      const cx=v.x+v.w/2, cy=v.y+v.h/2;
+      return{x:Math.max(0,Math.min(W-nw,cx-nw/2)),y:Math.max(0,Math.min(H-nh,cy-nh/2)),w:nw,h:nh};
+    });
+  };
+  const reset=()=>setVb({x:0,y:0,w:W,h:H});
+  const onWheel=(e)=>{e.preventDefault();zoom(e.deltaY>0?1.2:0.83);};
+  const onMD=(e)=>{if(e.button===0){const svg=e.currentTarget;const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const sp=pt.matrixTransform(svg.getScreenCTM().inverse());setDrag({sx:sp.x,sy:sp.y,ox:vb.x,oy:vb.y});}};
+  const onMM=(e)=>{if(drag){const svg=e.currentTarget;const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const sp=pt.matrixTransform(svg.getScreenCTM().inverse());const dx=sp.x-drag.sx,dy=sp.y-drag.sy;setVb(v=>({...v,x:Math.max(0,Math.min(W-v.w,drag.ox-dx)),y:Math.max(0,Math.min(H-v.h,drag.oy-dy))}));}};
+  const onMU=()=>setDrag(null);
+  const zoomLevel=Math.round((W/vb.w)*100);
+  const sc=W/vb.w;
+  return(<div style={{position:"relative"}}>
+    <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} style={{width:"100%",height:420,background:X.mapBg,borderRadius:8,cursor:drag?"grabbing":"grab"}} onWheel={onWheel} onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU} onMouseLeave={onMU}>
+      {PV.map((p,i)=><path key={i} d={pp(p.p)} fill={`hsl(${140+i*3},25%,${18+i}%)`} stroke="#4a7a44" strokeWidth={0.8/sc} opacity={0.85}/>)}
+      {PV.map((p,i)=>{const c=cn(p.p);return <text key={`l${i}`} x={tX(c[0])} y={tY(c[1])} textAnchor="middle" fill={sc>1.3?"rgba(255,255,255,0.5)":"rgba(255,255,255,0.25)"} fontSize={sc>1.5?6/sc*1.5:7/sc}>{p.n}</text>;})}
+      
+      {showStorm&&<>
+        {stormHigh.map((s,i)=>(<g key={`sh${i}`}>
+          <circle cx={tX(s.lon)} cy={tY(s.lat)} r={45/sc} fill="rgba(239,68,68,0.08)" stroke="#ef4444" strokeWidth={1.5/sc} strokeDasharray={`${6/sc},${3/sc}`}/>
+          {sc<2&&<text x={tX(s.lon)} y={tY(s.lat)-48/sc} textAnchor="middle" fill="#ef4444" fontSize={7/sc} fontWeight={700}>🌩️</text>}
+        </g>))}
+        {stormMed.map((s,i)=>(<g key={`sm${i}`}>
+          <circle cx={tX(s.lon)} cy={tY(s.lat)} r={38/sc} fill="rgba(249,115,22,0.06)" stroke="#f97316" strokeWidth={1/sc} strokeDasharray={`${4/sc},${3/sc}`}/>
+          {sc<2&&<text x={tX(s.lon)} y={tY(s.lat)-40/sc} textAnchor="middle" fill="#f97316" fontSize={7/sc}>⛈️</text>}
+        </g>))}
+      </>}
+      
+      {coords.map((c,i)=>(<circle key={`h${i}`} cx={tX(c.lon)} cy={tY(c.lat)} r={14/sc} fill={afC(c.af)} opacity={0.1}/>))}
+      {coords.map((c,i)=>(<circle key={i} cx={tX(c.lon)} cy={tY(c.lat)} r={hov===i?7/sc:Math.max(2,3.5/sc)} fill={afC(c.af)} stroke="rgba(255,255,255,0.4)" strokeWidth={hov===i?2/sc:0.3/sc} style={{cursor:"pointer"}} onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)} onClick={(e)=>{e.stopPropagation();onDotClick&&onDotClick(c);}}/>))}
+      {dists.map((d,i)=>{const r=Math.max(8,Math.min(20,d.count*1.5))/sc;return(<g key={`d${i}`}><circle cx={tX(d.lon)} cy={tY(d.lat)} r={r} fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth={1/sc} strokeDasharray={`${3/sc},${2/sc}`}/>{sc>1.5&&<text x={tX(d.lon)} y={tY(d.lat)+r+8/sc} textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize={6/sc}>{d.name}({d.count})</text>}</g>);})}
+    </svg>
+    {/* Zoom controls */}
+    <div style={{position:"absolute",top:8,left:8,display:"flex",flexDirection:"column",gap:3}}>
+      <button onClick={()=>zoom(0.7)} style={{width:28,height:28,borderRadius:6,border:`1px solid ${X.bd}`,background:X.s1,color:X.tx,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+      <button onClick={()=>zoom(1.4)} style={{width:28,height:28,borderRadius:6,border:`1px solid ${X.bd}`,background:X.s1,color:X.tx,cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+      <button onClick={reset} style={{width:28,height:28,borderRadius:6,border:`1px solid ${X.bd}`,background:X.s1,color:X.mu,cursor:"pointer",fontSize:9,display:"flex",alignItems:"center",justifyContent:"center"}}>⟳</button>
+      <div style={{textAlign:"center",fontSize:8,color:X.mu,fontFamily:"monospace"}}>{zoomLevel}%</div>
+    </div>
+    {/* Storm toggle */}
+    <div style={{position:"absolute",top:8,right:8,display:"flex",flexDirection:"column",gap:4}}>
+      <button onClick={()=>setShowStorm(!showStorm)} style={{fontSize:9,padding:"3px 8px",borderRadius:4,border:`1px solid ${showStorm?X.or:X.bd}`,background:showStorm?`${X.or}20`:X.s2,color:showStorm?X.or:X.mu,cursor:"pointer"}}>{showStorm?"🌩️ ซ่อนโซนพายุ":"🌩️ แสดงโซนพายุ"}</button>
+    </div>
+    {showStorm&&<div style={{position:"absolute",bottom:36,left:8,background:`${X.s1}e0`,borderRadius:6,padding:"6px 10px",fontSize:9,color:X.mu,border:`1px solid ${X.bd}`,backdropFilter:"blur(4px)"}}>
+      <div style={{fontWeight:700,color:X.or,marginBottom:3}}>⛈️ โซนพายุฤดูร้อน 11-13 มี.ค.</div>
+      <div style={{display:"flex",gap:8}}>
+        <span style={{display:"flex",alignItems:"center",gap:3}}><span style={{width:12,height:12,borderRadius:"50%",border:"1.5px dashed #ef4444"}}/> เสี่ยงสูง (5 จว.)</span>
+        <span style={{display:"flex",alignItems:"center",gap:3}}><span style={{width:12,height:12,borderRadius:"50%",border:"1px dashed #f97316"}}/> เสี่ยงปานกลาง (9 จว.)</span>
+      </div>
+      <div style={{fontSize:8,color:X.mu,marginTop:2}}>อ้างอิง: กรมอุตุฯ ฉบับที่ 3 (11 มี.ค. 69)</div>
+    </div>}
+    {hov!==null&&coords[hov]&&(<div style={{position:"absolute",bottom:8,left:"50%",transform:"translateX(-50%)",background:`${X.s1}f0`,border:`1px solid ${X.bd}`,borderRadius:8,padding:"6px 12px",fontSize:11,whiteSpace:"nowrap",pointerEvents:"none",zIndex:5}}>
+      <span style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:afC(coords[hov].af),marginRight:6,verticalAlign:"middle"}}/>
+      {coords[hov].sowner} | {coords[hov].sev} | {coords[hov].district||coords[hov].prov||"N/A"} | {coords[hov].aging}d
+    </div>)}
+  </div>);
+};
+
+// Leaflet Map (OpenStreetMap)
+const LMap=({coords,districts,onDotClick})=>{
+  const mapRef=useRef(null);
+  const mapInst=useRef(null);
+  const markersRef=useRef([]);
+  
+  const stormHigh=[{n:"แม่ฮ่องสอน",lat:19.3,lon:97.9},{n:"เชียงใหม่",lat:18.8,lon:98.9},{n:"เชียงราย",lat:19.9,lon:99.8},{n:"ลำพูน",lat:18.6,lon:99.0},{n:"ตาก",lat:16.9,lon:99.1}];
+  const stormMed=[{n:"ลำปาง",lat:18.3,lon:99.5},{n:"พะเยา",lat:19.2,lon:100.2},{n:"แพร่",lat:18.1,lon:100.1},{n:"น่าน",lat:18.8,lon:100.8},{n:"อุตรดิตถ์",lat:17.6,lon:100.1},{n:"สุโขทัย",lat:17.0,lon:99.8},{n:"กำแพงเพชร",lat:16.5,lon:99.5},{n:"พิษณุโลก",lat:16.8,lon:100.3},{n:"เพชรบูรณ์",lat:16.4,lon:101.2}];
+
+  useEffect(()=>{
+    if(!mapRef.current||mapInst.current) return;
+    // Load Leaflet CSS
+    if(!document.getElementById("leaflet-css")){
+      const link=document.createElement("link");
+      link.id="leaflet-css";link.rel="stylesheet";
+      link.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+    }
+    // Load Leaflet JS
+    const loadLeaflet=()=>{
+      if(window.L) return initMap();
+      const sc=document.createElement("script");
+      sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      sc.onload=initMap;
+      document.head.appendChild(sc);
+    };
+    const initMap=()=>{
+      const L=window.L;
+      const map=L.map(mapRef.current,{zoomControl:true}).setView([18.0,99.5],7);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+        attribution:'&copy; OpenStreetMap',maxZoom:18,opacity:0.9
+      }).addTo(map);
+      mapInst.current=map;
+      
+      // Storm zones
+      stormHigh.forEach(s=>{
+        L.circle([s.lat,s.lon],{radius:35000,color:"#ef4444",weight:2,dashArray:"8,4",fillColor:"#ef4444",fillOpacity:0.06}).addTo(map).bindTooltip(`🌩️ ${s.n} (เสี่ยงสูง)`,{direction:"top"});
+      });
+      stormMed.forEach(s=>{
+        L.circle([s.lat,s.lon],{radius:30000,color:"#f97316",weight:1.5,dashArray:"6,4",fillColor:"#f97316",fillOpacity:0.04}).addTo(map).bindTooltip(`⛈️ ${s.n} (เสี่ยงปานกลาง)`,{direction:"top"});
+      });
+      
+      // Ticket dots
+      (coords||[]).forEach(c=>{
+        const color=afC(c.af);
+        const marker=L.circleMarker([c.lat,c.lon],{radius:6,fillColor:color,color:"white",weight:1,fillOpacity:0.85}).addTo(map);
+        marker.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;line-height:1.6"><b>${c.sowner}</b><br/>${c.sev} | ${c.district||c.prov||"N/A"}<br/>Aging: <b>${c.aging}d</b><br/>Problem: ${c.problem}<br/>Root: ${c.root}${c.subimpact>0?"<br/>Subimpact: "+c.subimpact:""}</div>`,{maxWidth:250});
+        marker.on("click",()=>{if(onDotClick)onDotClick(c);});
+        markersRef.current.push(marker);
+      });
+      
+      // District labels
+      (districts||[]).filter(d=>d.lat&&d.lon&&d.name!=="ไม่ระบุ").forEach(d=>{
+        L.circleMarker([d.lat,d.lon],{radius:Math.max(4,Math.min(14,d.count/3)),fillColor:"transparent",color:"white",weight:1,dashArray:"3,2",fillOpacity:0}).addTo(map).bindTooltip(`${d.name} (${d.count} tickets)`,{permanent:false,direction:"top",className:"dist-label"});
+      });
+      
+      setTimeout(()=>map.invalidateSize(),200);
+    };
+    loadLeaflet();
+    return()=>{if(mapInst.current){mapInst.current.remove();mapInst.current=null;markersRef.current=[];}};
+  },[]);
+  
+  if(!coords||!coords.length) return <div style={{color:X.mu,padding:20}}>No coordinates</div>;
+  return(<div>
+    <div ref={mapRef} style={{width:"100%",height:420,borderRadius:8,overflow:"hidden",border:`1px solid ${X.bd}`}}/>
+    <div style={{display:"flex",gap:8,marginTop:6,fontSize:9,color:X.mu,flexWrap:"wrap"}}>
+      <span style={{display:"flex",alignItems:"center",gap:3}}><span style={{width:12,height:12,borderRadius:"50%",border:"2px dashed #ef4444"}}/> เสี่ยงสูง</span>
+      <span style={{display:"flex",alignItems:"center",gap:3}}><span style={{width:12,height:12,borderRadius:"50%",border:"1.5px dashed #f97316"}}/> เสี่ยงปานกลาง</span>
+      <span style={{fontSize:8,color:X.mu}}>อ้างอิง: กรมอุตุฯ ฉบับที่ 3 (11 มี.ค. 69) | © OpenStreetMap</span>
+    </div>
+  </div>);
+};
+
+// Map Wrapper — toggle SVG / Leaflet
+const MapWrapper=({coords,districts,onDotClick})=>{
+  const[mode,setMode]=useState("svg");
+  return(<div>
+    <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8,gap:4}}>
+      <button onClick={()=>setMode("svg")} style={{fontSize:10,padding:"4px 12px",borderRadius:5,border:`1px solid ${mode==="svg"?X.b:X.bd}`,background:mode==="svg"?`${X.b}15`:X.s2,color:mode==="svg"?X.b:X.mu,cursor:"pointer",fontWeight:mode==="svg"?700:400}}>🗺️ SVG Map (Offline)</button>
+      <button onClick={()=>setMode("leaflet")} style={{fontSize:10,padding:"4px 12px",borderRadius:5,border:`1px solid ${mode==="leaflet"?X.gn:X.bd}`,background:mode==="leaflet"?`${X.gn}15`:X.s2,color:mode==="leaflet"?X.gn:X.mu,cursor:"pointer",fontWeight:mode==="leaflet"?700:400}}>🌍 OpenStreetMap (Online)</button>
+    </div>
+    {mode==="svg"?<TMap coords={coords} districts={districts} onDotClick={onDotClick}/>:<LMap coords={coords} districts={districts} onDotClick={onDotClick}/>}
+  </div>);
+};
+
+// Cluster Leaflet Map
+const CLMap=({cluster,tickets,onDotClick})=>{
+  const mapRef=useRef(null);
+  const mapInst=useRef(null);
+  const cl=cluster;
+  useEffect(()=>{
+    if(!mapRef.current||!cl) return;
+    if(mapInst.current){mapInst.current.remove();mapInst.current=null;}
+    const loadL=()=>{
+      if(window.L) return init();
+      if(!document.getElementById("leaflet-css")){const lk=document.createElement("link");lk.id="leaflet-css";lk.rel="stylesheet";lk.href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";document.head.appendChild(lk);}
+      const sc=document.createElement("script");sc.src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";sc.onload=init;document.head.appendChild(sc);
+    };
+    const init=()=>{
+      const L=window.L;
+      const map=L.map(mapRef.current,{zoomControl:true,scrollWheelZoom:true}).setView([cl.lat,cl.lon],13);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap",maxZoom:19,opacity:0.9}).addTo(map);
+      mapInst.current=map;
+      L.circle([cl.lat,cl.lon],{radius:5000,color:"#4a7bbd",weight:2,dashArray:"8,4",fillColor:"#4a7bbd",fillOpacity:0.06}).addTo(map).bindTooltip("รัศมี 5 กม.",{direction:"top"});
+      L.circleMarker([cl.lat,cl.lon],{radius:5,fillColor:"#d44040",color:"white",weight:2,fillOpacity:1}).addTo(map).bindTooltip("ศูนย์กลาง Cluster",{direction:"top"});
+      const hav=(la1,lo1,la2,lo2)=>{const R=6371,dLat=(la2-la1)*Math.PI/180,dLon=(lo2-lo1)*Math.PI/180,a=Math.sin(dLat/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLon/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));};
+      (tickets||[]).forEach(t=>{
+        const dist=hav(cl.lat,cl.lon,t.lat,t.lon).toFixed(2);
+        const color=afC(t.af);
+        const m=L.circleMarker([t.lat,t.lon],{radius:7,fillColor:color,color:"white",weight:1.5,fillOpacity:0.9}).addTo(map);
+        m.bindPopup(`<div style="font-family:Inter,sans-serif;font-size:12px;line-height:1.6"><b>${t.tid}</b> | ${t.sev} | ${t.aging}d<br/><b>${t.site}</b><br/>${t.subj||""}<br/>📋 ${t.cls||"-"}<br/>📍 ห่างศูนย์กลาง <b>${dist} km</b></div>`,{maxWidth:280});
+        m.on("click",()=>{if(onDotClick)onDotClick(t);});
+      });
+      setTimeout(()=>map.invalidateSize(),200);
+    };
+    loadL();
+    return()=>{if(mapInst.current){mapInst.current.remove();mapInst.current=null;}};
+  },[cl]);
+  return(<div ref={mapRef} style={{width:"100%",height:320,borderRadius:8,overflow:"hidden",border:`1px solid ${X.bd}`}}/>);
+};
+
+// Cluster Map Wrapper — toggle SVG / Leaflet
+const ClusterMapWrapper=({cluster,tickets,onDotClick,cvb,setCvb,cdrag,setCdrag})=>{
+  const[cmode,setCmode]=useState("svg");
+  const cl=cluster;
+  return(<div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+      <div style={{fontSize:10,fontWeight:600,color:X.mu}}>แผนที่ไซต์ในรัศมี 5 กม.</div>
+      <div style={{display:"flex",gap:3}}>
+        <button onClick={()=>setCmode("svg")} style={{fontSize:9,padding:"3px 8px",borderRadius:4,border:`1px solid ${cmode==="svg"?X.b:X.bd}`,background:cmode==="svg"?`${X.b}15`:X.s2,color:cmode==="svg"?X.b:X.mu,cursor:"pointer"}}>🗺️ SVG</button>
+        <button onClick={()=>setCmode("leaflet")} style={{fontSize:9,padding:"3px 8px",borderRadius:4,border:`1px solid ${cmode==="leaflet"?X.gn:X.bd}`,background:cmode==="leaflet"?`${X.gn}15`:X.s2,color:cmode==="leaflet"?X.gn:X.mu,cursor:"pointer"}}>🌍 OSM</button>
+      </div>
+    </div>
+    {cmode==="leaflet"?<CLMap cluster={cl} tickets={cl.tkt||[]} onDotClick={onDotClick}/>:(()=>{
+      const cx=tX(cl.lon),cy=tY(cl.lat);
+      const defVb={x:cx-80,y:cy-60,w:160,h:120};
+      const vb2=cvb||defVb;
+      const csc=160/vb2.w;
+      const cZoom=(f)=>{const v=cvb||defVb;const nw=Math.max(20,Math.min(300,v.w*f)),nh=Math.max(15,Math.min(225,v.h*f));const mx=v.x+v.w/2,my=v.y+v.h/2;setCvb({x:mx-nw/2,y:my-nh/2,w:nw,h:nh});};
+      return(<div style={{position:"relative"}}>
+        <svg viewBox={`${vb2.x} ${vb2.y} ${vb2.w} ${vb2.h}`} style={{width:"100%",height:320,background:X.mapBg||"#d0dce8",borderRadius:8,border:`1px solid ${X.bd}`,cursor:cdrag?"grabbing":"grab"}}
+          onWheel={e=>{e.preventDefault();cZoom(e.deltaY>0?1.3:0.77);}}
+          onMouseDown={e=>{const svg=e.currentTarget;const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const sp=pt.matrixTransform(svg.getScreenCTM().inverse());const v=cvb||defVb;setCdrag({sx:sp.x,sy:sp.y,ox:v.x,oy:v.y});}}
+          onMouseMove={e=>{if(cdrag){const svg=e.currentTarget;const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;const sp=pt.matrixTransform(svg.getScreenCTM().inverse());setCvb(v=>({...(v||defVb),x:cdrag.ox-(sp.x-cdrag.sx),y:cdrag.oy-(sp.y-cdrag.sy)}));}}}
+          onMouseUp={()=>setCdrag(null)} onMouseLeave={()=>setCdrag(null)}>
+          {PV.map((p,i)=><path key={i} d={pp(p.p)} fill={`hsl(${140+i*3},25%,${70+i}%)`} stroke={X.bd} strokeWidth={0.5/csc} opacity={0.5}/>)}
+          <circle cx={cx} cy={cy} r={18/csc} fill="none" stroke={X.b} strokeWidth={1/csc} strokeDasharray={`${4/csc},${2/csc}`} opacity={0.6}/>
+          <circle cx={cx} cy={cy} r={18/csc} fill={`${X.b}10`}/>
+          {(cl.tkt||[]).map((t,i)=>(<g key={i}>
+            <circle cx={tX(t.lon)} cy={tY(t.lat)} r={Math.max(2,4/csc)} fill={afC(t.af)} stroke="white" strokeWidth={0.8/csc}/>
+            {csc>0.8&&<text x={tX(t.lon)+5/csc} y={tY(t.lat)+1.5/csc} fill={X.tx} fontSize={Math.max(1.5,3/csc)} fontFamily="monospace">{t.site.slice(0,12)}</text>}
+          </g>))}
+          <circle cx={cx} cy={cy} r={2/csc} fill={X.rd} stroke="white" strokeWidth={0.5/csc}/>
+          {csc<1.5&&<text x={cx} y={cy-6/csc} textAnchor="middle" fill={X.b} fontSize={3/csc} fontWeight={700}>ศูนย์กลาง</text>}
+        </svg>
+        <div style={{position:"absolute",top:6,left:6,display:"flex",flexDirection:"column",gap:2}}>
+          <button onClick={()=>cZoom(0.65)} style={{width:24,height:24,borderRadius:4,border:`1px solid ${X.bd}`,background:X.s1,color:X.tx,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+          <button onClick={()=>cZoom(1.5)} style={{width:24,height:24,borderRadius:4,border:`1px solid ${X.bd}`,background:X.s1,color:X.tx,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+          <button onClick={()=>setCvb(null)} style={{width:24,height:24,borderRadius:4,border:`1px solid ${X.bd}`,background:X.s1,color:X.mu,cursor:"pointer",fontSize:9,display:"flex",alignItems:"center",justifyContent:"center"}}>⟳</button>
+        </div>
+      </div>);
+    })()}
+    <div style={{display:"flex",gap:8,marginTop:6,fontSize:9,color:X.mu}}>
+      <span style={{display:"flex",alignItems:"center",gap:3}}><span style={{width:10,height:10,borderRadius:"50%",border:`1.5px dashed ${X.b}`}}/> รัศมี 5 กม.</span>
+      <span style={{display:"flex",alignItems:"center",gap:3}}><span style={{width:6,height:6,borderRadius:"50%",background:X.rd}}/> ศูนย์กลาง</span>
+      <AfLeg/>
+    </div>
+  </div>);
+};
+
+const TicketModal=({ticket:t,onClose})=>{
+  if(!t) return null;
+  const rows=[["Ticket ID",t.tid],["Status",t.status],["Severity",t.sev],["Aging Flag",t.af],["Aging (days)",t.aging],["Priority",t.pri!==undefined?"P"+t.pri+" ("+(t.pri===0?"เกิน >24h":t.pri===1?"เกิน <24h":"ใน SLA")+")":"-"],["Over SLA (days)",t.over_sla],["Owner Group",t.sowner],["Region",t.reg],["จังหวัด / อำเภอ",`${t.prov||"N/A"} / ${t.dist||"N/A"}`],["Site",t.site],["CI Name",t.ci],["Category",t.cat],["Problem",t.problem],["Root Cause",t.root],["Subimpact",t.sub||"-"],["Created",t.created],["Target Finish",t.target],["Plan Close",t.plan||"-"],["External System",t.ext],["Bookmark",t.bookmark],["พิกัด",t.lat&&t.lon?`${t.lat}, ${t.lon}`:"-"],["Subject",t.subj],["Classification",t.cls]];
+  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
+    <div style={{background:X.s1,border:`1px solid ${X.bd}`,borderRadius:12,padding:"20px 24px",maxWidth:560,width:"90%",maxHeight:"85vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.5)"}} onClick={e=>e.stopPropagation()}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div>
+          <div style={{fontSize:16,fontWeight:700}}>{t.tid}</div>
+          <div style={{fontSize:11,color:X.mu}}>{t.site} | {t.ci}</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{padding:"3px 10px",borderRadius:6,fontFamily:"monospace",fontSize:12,fontWeight:700,background:afC(t.af)+"25",color:afC(t.af),border:`1px solid ${afC(t.af)}40`}}>{t.af.replace(/^\d+\)\s*/,"")}</span>
+          <button onClick={onClose} style={{background:"none",border:"none",color:X.mu,cursor:"pointer",fontSize:18,padding:4}}>✕</button>
+        </div>
+      </div>
+      {t.subj&&<div style={{padding:"8px 12px",background:X.s2,borderRadius:8,fontSize:11,color:X.mu,marginBottom:12,lineHeight:1.5}}>{t.subj}</div>}
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+        <tbody>{rows.map(([k,v],i)=>v&&v!=="-"&&v!=="None"&&(<tr key={i} style={{borderBottom:`1px solid ${X.bd}15`}}>
+          <td style={{padding:"6px 0",color:X.mu,width:"40%",verticalAlign:"top"}}>{k}</td>
+          <td style={{padding:"6px 0",fontFamily:typeof v==="number"||/^\d/.test(String(v))?"monospace":"inherit",wordBreak:"break-all"}}>{v}</td>
+        </tr>))}</tbody>
+      </table>
+    </div>
+  </div>);
+};
+
+// Ticket List component (clickable rows)
+const TicketList=({tickets,filter,onSelect})=>{
+  const[search,setSearch]=useState("");
+  const[sortBy,setSortBy]=useState("aging");
+  const[page,setPage]=useState(0);
+  const PER=20;
+  
+  const filtered=useMemo(()=>{
+    let t=tickets||[];
+    if(filter) t=t.filter(filter);
+    if(search){const s=search.toLowerCase();t=t.filter(x=>x.tid.toLowerCase().includes(s)||x.sowner.toLowerCase().includes(s)||x.site.toLowerCase().includes(s)||(x.prov||"").toLowerCase().includes(s)||(x.dist||"").toLowerCase().includes(s));}
+    if(sortBy==="aging") t=[...t].sort((a,b)=>b.aging-a.aging);
+    else if(sortBy==="sev") t=[...t].sort((a,b)=>a.sev.localeCompare(b.sev));
+    else if(sortBy==="af") t=[...t].sort((a,b)=>AF.indexOf(a.af)-AF.indexOf(b.af));
+    return t;
+  },[tickets,filter,search,sortBy]);
+
+  const paged=filtered.slice(page*PER,(page+1)*PER);
+  const pages=Math.ceil(filtered.length/PER);
+
+  return(<div>
+    <div style={{display:"flex",gap:8,marginBottom:10,alignItems:"center",flexWrap:"wrap"}}>
+      <input value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}} placeholder="🔍 ค้นหา Ticket ID, Owner, Site, จังหวัด, อำเภอ..." style={{flex:1,minWidth:200,padding:"6px 12px",borderRadius:6,border:`1px solid ${X.bd}`,background:X.s2,color:X.tx,fontSize:11,outline:"none"}}/>
+      <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{padding:"6px 10px",borderRadius:6,border:`1px solid ${X.bd}`,background:X.s2,color:X.tx,fontSize:11}}>
+        <option value="aging">Sort: Aging ↓</option>
+        <option value="sev">Sort: Severity</option>
+        <option value="af">Sort: Aging Flag</option>
+      </select>
+      <span style={{fontSize:10,color:X.mu}}>{filtered.length} tickets</span>
+    </div>
+    <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
+      <thead><tr>{["Ticket ID","Sev","Pri","Owner","จังหวัด","อำเภอ","Site","Aging","AF","Subject","Classification","Status"].map((h,i)=>(<th key={i} style={{textAlign:"left",padding:"5px 4px",fontWeight:600,fontSize:9,color:X.mu,borderBottom:`1px solid ${X.bd}`,background:X.s2,whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
+      <tbody>{paged.map((t,i)=>(<tr key={i} onClick={()=>onSelect(t)} style={{cursor:"pointer",borderBottom:`1px solid ${X.bd}10`}} onMouseEnter={e=>e.currentTarget.style.background=X.s2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+        <td style={{padding:"5px 4px",fontFamily:"monospace",fontWeight:600,color:X.b,fontSize:10}}>{t.tid}</td>
+        <td style={{padding:"5px 4px",fontFamily:"monospace",fontWeight:700,color:t.sev.startsWith("SA")?X.or:X.b}}>{t.sev}</td>
+        <td style={{padding:"5px 4px",textAlign:"center"}}><span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,background:priC(t.pri)+"20",color:priC(t.pri)}}>P{t.pri}</span></td>
+        <td style={{padding:"5px 4px",fontFamily:"monospace",fontSize:9}}>{t.sowner}</td>
+        <td style={{padding:"5px 4px",fontSize:10,color:X.mu}}>{t.prov||"-"}</td>
+        <td style={{padding:"5px 4px",fontSize:10,color:X.mu}}>{t.dist||"-"}</td>
+        <td style={{padding:"5px 4px",fontFamily:"monospace",fontSize:9}}>{t.site}</td>
+        <td style={{padding:"5px 4px",fontFamily:"monospace",fontWeight:700,color:t.aging>30?X.rd:t.aging>7?X.or:t.aging>1?X.gn:"#16a34a"}}>{t.aging}d</td>
+        <td style={{padding:"5px 4px"}}><span style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:afC(t.af),verticalAlign:"middle",marginRight:3}}/><span style={{fontSize:9}}>{AFL[AF.indexOf(t.af)]}</span></td>
+        <td style={{padding:"5px 4px",fontSize:9,color:X.mu,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.subj||"-"}</td>
+        <td style={{padding:"5px 4px",fontSize:9,color:X.cy,maxWidth:160,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={t.cls||""}>{t.cls?t.cls.split(" \\ ").pop():"-"}</td>
+        <td style={{padding:"5px 4px",fontSize:9,color:t.status.includes("Progress")?X.gn:X.mu}}>{t.status}</td>
+      </tr>))}</tbody>
+    </table></div>
+    {pages>1&&<div style={{display:"flex",gap:4,marginTop:8,justifyContent:"center"}}>
+      {Array.from({length:Math.min(pages,10)},(_,i)=>(<button key={i} onClick={()=>setPage(i)} style={{padding:"3px 8px",borderRadius:4,border:`1px solid ${page===i?X.b:X.bd}`,background:page===i?`${X.b}20`:X.s2,color:page===i?X.b:X.mu,cursor:"pointer",fontSize:10,fontFamily:"monospace"}}>{i+1}</button>))}
+      {pages>10&&<span style={{fontSize:10,color:X.mu}}>...{pages}</span>}
+    </div>}
+  </div>);
+};
+
+const Insight=({d})=>{
+  const i=d.insight;if(!i) return null;
+  const n1p=i.nor1_total?((i.nor1_over/i.nor1_total)*100).toFixed(0):0;
+  const n2p=i.nor2_total?((i.nor2_over/i.nor2_total)*100).toFixed(0):0;
+  return(<div style={{padding:"14px 18px",background:X.s1,border:`1px solid ${X.bd}`,borderLeft:"3px solid "+X.or,borderRadius:12,marginTop:14}}>
+    <div style={{fontSize:14,fontWeight:700,color:X.tx,marginBottom:12,paddingBottom:8,borderBottom:`1px solid ${X.bd}`}}>สรุปผลการวิเคราะห์และข้อเสนอแนะ</div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,fontSize:12,lineHeight:1.8}}>
+      <div><div style={{fontWeight:700,color:X.b,marginBottom:4,fontSize:12}}>1. สถานะ SLA ภาพรวม</div><div style={{color:X.mu}}>• Within SLA <strong style={{color:"#16a34a"}}>{i.within_pct}%</strong> ({d.af["6) Within SLA"]||0} tkts)<br/>• Over SLA รวม <strong style={{color:X.rd}}>{d.total-(d.af["6) Within SLA"]||0)}</strong> tkts<br/>{i.over30>0&&<>• <strong style={{color:"#991b1b"}}>Over &gt;30d: {i.over30} tkts ({i.over30_pct}%)</strong> — เร่งด่วน!<br/></>}• Avg: <strong style={{color:d.aging_avg>10?X.rd:d.aging_avg>1?X.or:X.gn}}>{d.aging_avg}d</strong> | Max: {d.aging_max}d</div></div>
+      <div><div style={{fontWeight:700,color:X.cy,marginBottom:4,fontSize:12}}>2. เปรียบเทียบ NOR1 — NOR2</div><div style={{color:X.mu}}>• NOR1: {i.nor1_total} tkts, Over <strong style={{color:i.nor1_over>30?X.rd:X.or}}>{i.nor1_over}</strong> ({n1p}%)<br/>• NOR2: {i.nor2_total} tkts, Over <strong style={{color:i.nor2_over>30?X.rd:X.or}}>{i.nor2_over}</strong> ({n2p}%)<br/>{i.nor1_total>0&&i.nor2_total>0&&Number(n1p)>Number(n2p)&&<>• <strong style={{color:X.rd}}>NOR1 Over SLA สูงกว่า</strong><br/></>}</div></div>
+      <div><div style={{fontWeight:700,color:X.rd,marginBottom:4,fontSize:12}}>3. จุดที่ต้องเฝ้าระวัง</div><div style={{color:X.mu}}>• Owner Avg สูงสุด: <strong style={{color:X.tx}}>{i.worst}</strong> ({i.worst_avg}d)<br/>• Owner Avg ต่ำสุด: <strong style={{color:X.gn}}>{i.best}</strong> ({i.best_avg}d)<br/>• อำเภอ #1: <strong style={{color:X.tx}}>{i.top_dist}</strong> ({i.top_dist_count} tkts)<br/>• Root #1: <strong style={{color:X.tx}}>{i.top_root}</strong> ({i.top_root_count} tkts)</div></div>
+      <div><div style={{fontWeight:700,color:X.gn,marginBottom:4,fontSize:12}}>4. ข้อเสนอแนะเชิงปฏิบัติ</div><div style={{color:X.mu}}>{i.over30>0&&<>• เร่ง resolve &gt;30d ({i.over30} tkts)<br/></>}{i.nor1_over>i.nor2_over&&<>• เพิ่ม resource NOR1<br/></>}{i.sub_total>0&&<>• Subimpact <strong style={{color:X.or}}>{i.sub_total}</strong> users ({i.sub_affected} tkts)<br/></>}• Best practice จาก <strong style={{color:X.gn}}>{i.best}</strong></div></div>
+      {d.need_team&&d.need_team.length>0&&<div style={{gridColumn:"1 / -1"}}>
+        <div style={{fontWeight:700,color:"#f59e0b",marginBottom:6,fontSize:12}}>5. พื้นที่ที่แนะนำเพิ่มทีมงาน (วิเคราะห์จาก Tickets × Avg Aging)</div>
+        <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+          <thead><tr>{["#","อำเภอ","จังหวัด","Reg","Tkts","Avg","Over","Score","เหตุผล"].map((h,j)=>(<th key={j} style={{textAlign:j>3?"center":"left",padding:"5px 6px",fontSize:9,color:X.mu,borderBottom:`1px solid ${X.bd}`,background:X.s2}}>{h}</th>))}</tr></thead>
+          <tbody>{d.need_team.map((t,j)=>{
+            const reason=t.avg>50?"Aging สูงมาก ทีมไม่พอ":t.avg>10?"Aging สูง เสริมกำลัง":t.count>30?"Ticket มาก ภาระสูง":t.over>5?"Over SLA หลายรายการ":"Ticket+Aging สูงกว่าเฉลี่ย";
+            return(<tr key={j} style={{background:j===0?`${X.rd}08`:j===1?`${X.or}05`:"transparent"}}><td style={{padding:"5px 6px",fontFamily:"monospace",fontWeight:700,color:j<2?X.rd:X.mu}}>{j+1}</td><td style={{padding:"5px 6px",fontWeight:700}}>{t.name}</td><td style={{padding:"5px 6px",color:X.mu}}>{t.prov}</td><td style={{padding:"5px 6px"}}><span style={{fontFamily:"monospace",fontSize:9,padding:"1px 5px",borderRadius:3,background:t.reg==="NOR1"?`${X.b}18`:`${X.cy}18`,color:t.reg==="NOR1"?X.b:X.cy}}>{t.reg}</span></td><td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:X.b}}>{t.count}</td><td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:t.avg>50?X.rd:t.avg>10?X.or:X.gn}}>{t.avg}d</td><td style={{textAlign:"center",fontFamily:"monospace",color:t.over>10?X.rd:X.or}}>{t.over}</td><td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:"#f59e0b"}}>{t.score}</td><td style={{padding:"5px 6px",fontSize:10,color:X.mu}}>{reason}</td></tr>);
+          })}</tbody>
+        </table></div>
+      </div>}
+    </div>
+  </div>);
+};
+
+const TabContent=({data})=>{
+  const[selTicket,setSelTicket]=useState(null);
+  const[selCluster,setSelCluster]=useState(null);
+  const[cvb,setCvb]=useState(null);
+  const[cdrag,setCdrag]=useState(null);
+  const[showList,setShowList]=useState(false);
+  const[fOwner,setFOwner]=useState("all");
+  const[fReg,setFReg]=useState("all");
+  const[fAF,setFAF]=useState("all");
+  const[fSev,setFSev]=useState("all");
+  const[fPri,setFPri]=useState("all");
+  if(!data) return null;
+  const d=data;
+
+  // Build unique values for dropdowns
+  const allOwners=useMemo(()=>[...new Set((d.tickets||[]).map(t=>t.sowner))].sort(),[d]);
+  const allSevs=useMemo(()=>[...new Set((d.tickets||[]).map(t=>t.sev))].sort(),[d]);
+
+  // Apply filters
+  const hasFilter=fOwner!=="all"||fReg!=="all"||fAF!=="all"||fSev!=="all"||fPri!=="all";
+  const filteredTickets=useMemo(()=>{
+    if(!hasFilter) return d.tickets||[];
+    return (d.tickets||[]).filter(t=>{
+      if(fOwner!=="all"&&t.sowner!==fOwner) return false;
+      if(fReg!=="all"&&t.reg!==fReg) return false;
+      if(fAF!=="all"&&t.af!==fAF) return false;
+      if(fSev!=="all"&&t.sev!==fSev) return false;
+      if(fPri!=="all"&&String(t.pri)!==fPri) return false;
+      return true;
+    });
+  },[d,fOwner,fReg,fAF,fSev,hasFilter]);
+
+  const filteredCoords=useMemo(()=>{
+    if(!hasFilter) return d.coords||[];
+    return (d.coords||[]).filter(c=>{
+      if(fOwner!=="all"&&c.sowner!==fOwner) return false;
+      if(fReg!=="all") return false; // coords don't have reg, skip
+      if(fAF!=="all"&&c.af!==fAF) return false;
+      if(fSev!=="all"&&c.sev!==fSev) return false;
+      return true;
+    });
+  },[d,fOwner,fReg,fAF,fSev,hasFilter]);
+
+  const fTotal=hasFilter?filteredTickets.length:d.total;
+  const fWithin=hasFilter?filteredTickets.filter(t=>t.af==="6) Within SLA").length:(d.af["6) Within SLA"]||0);
+  const ov=fTotal-fWithin;
+  const sub=d.subimpact||{};
+
+  const selStyle={padding:"5px 10px",borderRadius:6,border:`1px solid ${X.bd}`,background:X.s2,color:X.tx,fontSize:11,cursor:"pointer",fontFamily:"'Inter','Sarabun',sans-serif",outline:"none",maxWidth:180};
+  const resetFilters=()=>{setFOwner("all");setFReg("all");setFAF("all");setFSev("all");setFPri("all");};
+
+  return(<div>
+    {selTicket&&<TicketModal ticket={selTicket} onClose={()=>setSelTicket(null)}/>}
+
+    {/* Filter Bar */}
+    <div style={{padding:"12px 16px",background:X.s1,border:`1px solid ${X.bd}`,borderRadius:8,marginBottom:14,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+      <div style={{fontSize:11,fontWeight:700,color:X.mu,marginRight:4}}>🔍 Filter:</div>
+      <div style={{display:"flex",flexDirection:"column",gap:2}}>
+        <label style={{fontSize:9,color:X.mu,fontWeight:600}}>Owner Group</label>
+        <select value={fOwner} onChange={e=>setFOwner(e.target.value)} style={selStyle}>
+          <option value="all">ทั้งหมด ({allOwners.length})</option>
+          {allOwners.map(o=>(<option key={o} value={o}>{o}</option>))}
+        </select>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:2}}>
+        <label style={{fontSize:9,color:X.mu,fontWeight:600}}>Region</label>
+        <select value={fReg} onChange={e=>setFReg(e.target.value)} style={selStyle}>
+          <option value="all">ทั้งหมด</option>
+          <option value="NOR1">NOR1</option>
+          <option value="NOR2">NOR2</option>
+        </select>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:2}}>
+        <label style={{fontSize:9,color:X.mu,fontWeight:600}}>Aging Flag</label>
+        <select value={fAF} onChange={e=>setFAF(e.target.value)} style={selStyle}>
+          <option value="all">ทั้งหมด</option>
+          {AF.map((a,i)=>(<option key={a} value={a}>{AFL[i]}</option>))}
+        </select>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:2}}>
+        <label style={{fontSize:9,color:X.mu,fontWeight:600}}>Severity</label>
+        <select value={fSev} onChange={e=>setFSev(e.target.value)} style={selStyle}>
+          <option value="all">ทั้งหมด ({allSevs.length})</option>
+          {allSevs.map(s=>(<option key={s} value={s}>{s}</option>))}
+        </select>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:2}}>
+        <label style={{fontSize:9,color:X.mu,fontWeight:600}}>Priority</label>
+        <select value={fPri} onChange={e=>setFPri(e.target.value)} style={selStyle}>
+          <option value="all">ทั้งหมด</option>
+          <option value="0">🔴 P0 เกิน &gt;24h</option>
+          <option value="1">🟠 P1 เกิน &lt;24h</option>
+          <option value="2">🟢 P2 ใน SLA</option>
+        </select>
+      </div>
+      {hasFilter&&<div style={{display:"flex",flexDirection:"column",gap:2,marginLeft:"auto"}}>
+        <div style={{fontSize:9,color:X.mu}}>&nbsp;</div>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+          <span style={{fontSize:12,fontWeight:700,color:X.b,fontFamily:"monospace"}}>{fTotal} / {d.total} tickets</span>
+          <button onClick={resetFilters} style={{fontSize:10,padding:"4px 10px",borderRadius:4,border:`1px solid ${X.rd}40`,background:`${X.rd}10`,color:X.rd,cursor:"pointer"}}>✕ ล้าง Filter</button>
+        </div>
+      </div>}
+    </div>
+    
+    <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10,marginBottom:14}}>
+      <KPI label="Total" value={fTotal} color={X.b}/>
+      <KPI label="Within SLA" value={fWithin} sub={fTotal?`${(fWithin/fTotal*100).toFixed(1)}%`:"-"} color="#16a34a"/>
+      <KPI label="Over SLA" value={ov} sub={fTotal?`${(ov/fTotal*100).toFixed(1)}%`:"-"} color={X.rd}/>
+      <KPI label="NOR1" value={hasFilter?filteredTickets.filter(t=>t.reg==="NOR1").length:(d.reg_sum?.NOR1?.total||0)} sub={hasFilter?"filtered":`Avg ${d.reg_sum?.NOR1?.avg_aging||0}d`} color={X.b}/>
+      <KPI label="NOR2" value={hasFilter?filteredTickets.filter(t=>t.reg==="NOR2").length:(d.reg_sum?.NOR2?.total||0)} sub={hasFilter?"filtered":`Avg ${d.reg_sum?.NOR2?.avg_aging||0}d`} color={X.cy}/>
+      <KPI label="Subimpact" value={hasFilter?filteredTickets.reduce((s,t)=>s+(t.sub||0),0):(sub.total||0)} sub={hasFilter?`${filteredTickets.filter(t=>t.sub>0).length} tkts`:`${sub.count_nonzero||0} tkts`} color={X.pu}/>
+    </div>
+
+    {/* Priority Summary */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:14}}>
+      {[["P0 — เกิน Target > 24 ชม.",hasFilter?filteredTickets.filter(t=>t.pri===0).length:(d.priority?.p0||0),"#dc2626","วิกฤต ต้องเร่งด่วน"],["P1 — เกิน Target ≤ 24 ชม.",hasFilter?filteredTickets.filter(t=>t.pri===1).length:(d.priority?.p1||0),"#ea580c","เพิ่งเกิน ต้องรีบแก้"],["P2 — ยังอยู่ใน SLA",hasFilter?filteredTickets.filter(t=>t.pri===2).length:(d.priority?.p2||0),"#16a34a","ปกติ"]].map(([label,val,color,desc],i)=>(<div key={i} style={{background:X.s1,border:`1px solid ${X.bd}`,borderRadius:8,padding:"10px 14px",display:"flex",alignItems:"center",gap:12}}>
+        <div style={{width:48,height:48,borderRadius:8,background:color+"18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:800,color,fontFamily:"'Inter',sans-serif"}}>{val}</div>
+        <div><div style={{fontSize:12,fontWeight:700,color:X.tx}}>{label}</div><div style={{fontSize:10,color:X.mu}}>{desc} ({fTotal?((val/fTotal)*100).toFixed(0):0}%)</div></div>
+      </div>))}
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+      <Card title="Aging Flag Distribution" dot="#16a34a">
+        {afSB(d.af,d.total,34)}
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:10}}>{AF.map((k,i)=>{const v=d.af[k]||0;return v>0&&(<div key={i} style={{textAlign:"center"}}><div style={{fontFamily:"monospace",fontSize:14,fontWeight:700,color:AFC[i]}}>{v}</div><div style={{fontSize:8,color:X.mu}}>{AFL[i]} ({(v/d.total*100).toFixed(0)}%)</div></div>);})}</div>
+        <div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${X.bd}`}}>
+          {["NOR1","NOR2"].map(reg=>{const rs=d.reg_sum?.[reg];if(!rs) return null;const rc=reg==="NOR1"?X.b:X.cy;const o2=rs.total-(rs["6) Within SLA"]||0);return(<div key={reg} style={{marginBottom:10,padding:10,background:X.s2,borderRadius:8,border:`1px solid ${X.bd}`}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontFamily:"monospace",fontSize:12,fontWeight:700,color:rc,padding:"2px 8px",background:`${rc}15`,borderRadius:4}}>{reg}</span><span style={{fontFamily:"monospace",fontSize:13,fontWeight:700}}>{rs.total}</span></div><span style={{fontSize:10,color:o2>20?X.rd:o2>5?X.or:X.gn}}>Over:{o2} ({(o2/rs.total*100).toFixed(0)}%)</span></div>{afSB(rs,rs.total,22)}</div>);})}
+          <AfLeg/>
+        </div>
+      </Card>
+      <Card title="Ticket Map + Heatmap + อำเภอ (คลิกจุดเพื่อดู Ticket)" dot={X.pu}><MapWrapper coords={hasFilter?filteredCoords:d.coords} districts={d.districts} onDotClick={(c)=>{const t=(d.tickets||[]).find(t=>t.lat===c.lat&&t.lon===c.lon&&t.sev===c.sev);if(t)setSelTicket(t);else{setShowList("dot:"+c.sowner);}}}/><div style={{marginTop:6}}><AfLeg/></div></Card>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:14}}>
+      <Card title="Severity × Aging Flag" dot={X.or}>{(d.sev_af||[]).slice(0,10).map((s,i)=>(<div key={i} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:3}}><span style={{fontFamily:"monospace",fontWeight:700}}>{s.name}</span><span style={{fontFamily:"monospace",color:X.mu}}>{s.total}</span></div>{afSB(s,s.total,18)}</div>))}<div style={{marginTop:6}}><AfLeg/></div></Card>
+      <Card title="Category (Top)" dot={X.cy}>{Object.entries(d.cat).slice(0,6).map(([c,v],i)=>(<div key={c} style={{marginBottom:6}}><div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:2}}><span>{c}</span><span style={{fontFamily:"monospace",color:X.mu}}>{v}</span></div><Bar val={v} max={Math.max(...Object.values(d.cat))} color={[X.or,X.cy,X.pu,X.b,X.gn,"#f87171"][i%6]}/></div>))}</Card>
+      <Card title="Root Cause × Aging Flag" dot={X.rd}>{d.root_af.slice(0,6).map((r,i)=>(<div key={i} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:10,marginBottom:3}}><span style={{fontWeight:600}}>{r.name}</span><span style={{fontFamily:"monospace",color:X.mu}}>{r.total}</span></div>{afSB(r,r.total,16)}</div>))}<div style={{marginTop:6}}><AfLeg/></div></Card>
+    </div>
+    {/* Weather × Root Cause Analysis */}
+    {d.weather&&<div style={{marginTop:14}}><Card title="⛈️ วิเคราะห์สภาพอากาศ × Root Cause (CREATIONDATE 11-12 มี.ค. 69)" dot={X.or} defaultOpen={false}>
+      <div style={{padding:"12px 16px",background:X.s2,borderRadius:8,border:`1px solid ${X.bd}`,marginBottom:12}}>
+        <div style={{fontSize:12,fontWeight:700,color:X.or,marginBottom:8}}>📡 สรุปข้อมูล Ticket ที่สร้างช่วงพายุ</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+          <div style={{textAlign:"center"}}><div style={{fontFamily:"monospace",fontSize:20,fontWeight:700,color:X.b}}>{d.weather.summary.total_11mar}</div><div style={{fontSize:9,color:X.mu}}>11 มี.ค. (ทั้งหมด)</div></div>
+          <div style={{textAlign:"center"}}><div style={{fontFamily:"monospace",fontSize:20,fontWeight:700,color:X.cy}}>{d.weather.summary.total_12mar}</div><div style={{fontSize:9,color:X.mu}}>12 มี.ค. (ทั้งหมด)</div></div>
+          <div style={{textAlign:"center"}}><div style={{fontFamily:"monospace",fontSize:20,fontWeight:700,color:X.rd}}>{d.weather.summary.power_11mar+d.weather.summary.power_12mar}</div><div style={{fontSize:9,color:X.mu}}>Power Fail รวม</div></div>
+          <div style={{textAlign:"center"}}><div style={{fontFamily:"monospace",fontSize:20,fontWeight:700,color:"#f59e0b"}}>{d.weather.summary.peak_count}</div><div style={{fontSize:9,color:X.mu}}>Peak ({d.weather.summary.peak_hour})</div></div>
+        </div>
+      </div>
+      
+      {/* Simple Timeline Table */}
+      <div style={{fontSize:11,fontWeight:700,color:X.mu,marginBottom:8}}>📊 Ticket ที่สร้างช่วงพายุ แยกตามช่วงเวลา</div>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+        <thead>
+          <tr>
+            <th style={{textAlign:"left",padding:"8px 10px",fontSize:10,color:X.mu,borderBottom:`1px solid ${X.bd}`,background:X.s2}}>ช่วงเวลา</th>
+            <th style={{textAlign:"center",padding:"8px 10px",fontSize:10,color:X.mu,borderBottom:`1px solid ${X.bd}`,background:X.s2}}>Ticket</th>
+            <th style={{textAlign:"center",padding:"8px 10px",fontSize:10,color:X.rd,borderBottom:`1px solid ${X.bd}`,background:X.s2}}>⚡ Power Fail</th>
+            <th style={{textAlign:"left",padding:"8px 10px",fontSize:10,color:X.mu,borderBottom:`1px solid ${X.bd}`,background:X.s2}}>จังหวัดหลัก</th>
+            <th style={{textAlign:"left",padding:"8px 10px",fontSize:10,color:X.mu,borderBottom:`1px solid ${X.bd}`,background:X.s2,width:"35%"}}>สภาพอากาศ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[
+            {label:"11 มี.ค. เช้า (06-12น.)",filter:t=>t.time.includes("03-11")&&parseInt(t.time.slice(11,13))>=6&&parseInt(t.time.slice(11,13))<12,weather:"อากาศร้อน เริ่มมีเมฆมาก"},
+            {label:"11 มี.ค. บ่าย (12-18น.)",filter:t=>t.time.includes("03-11")&&parseInt(t.time.slice(11,13))>=12&&parseInt(t.time.slice(11,13))<18,weather:"⛈️ พายุฝนฟ้าคะนองเริ่มก่อตัว ลมกระโชกแรง"},
+            {label:"11 มี.ค. ค่ำ-ดึก (18-24น.)",filter:t=>t.time.includes("03-11")&&parseInt(t.time.slice(11,13))>=18,weather:"🌩️ ฝนฟ้าคะนองรุนแรง ฟ้าผ่า ลูกเห็บตก"},
+            {label:"12 มี.ค. ดึก-เช้ามืด (00-06น.)",filter:t=>t.time.includes("03-12")&&parseInt(t.time.slice(11,13))<6,weather:"🌧️ ฝนตกหนักต่อเนื่อง ไฟฟ้าขัดข้องหลายพื้นที่"},
+            {label:"12 มี.ค. เช้า (06-08น.)",filter:t=>t.time.includes("03-12")&&parseInt(t.time.slice(11,13))>=6&&parseInt(t.time.slice(11,13))<8,weather:"⚡ ผลกระทบสะสม — Peak ของ Ticket"},
+          ].map((period,pi)=>{
+            const entries=(d.weather.timeline||[]).filter(period.filter);
+            const total=entries.reduce((s,e)=>s+e.total,0);
+            const power=entries.reduce((s,e)=>s+e.power,0);
+            const provMap={};entries.forEach(e=>{(e.provs||"").split(",").forEach(p=>{if(p){const m=p.match(/(.+)\((\d+)\)/);if(m)provMap[m[1]]=(provMap[m[1]]||0)+parseInt(m[2]);}});});
+            const topProvs=Object.entries(provMap).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([p,c])=>`${p} (${c})`).join(", ");
+            const isPeak=total>50;const isHigh=total>20;
+            return(<tr key={pi} style={{background:isPeak?`${X.rd}10`:isHigh?`${X.or}06`:"transparent",borderBottom:`1px solid ${X.bd}30`}}>
+              <td style={{padding:"8px 10px",fontWeight:600,fontSize:11}}>{period.label}</td>
+              <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,fontSize:isPeak?18:14,color:isPeak?X.rd:isHigh?X.or:X.gn}}>{total}</td>
+              <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:power>0?X.rd:X.mu+"40"}}>{power>0?power:"-"}</td>
+              <td style={{padding:"8px 10px",fontSize:10,color:X.mu}}>{topProvs||"-"}</td>
+              <td style={{padding:"8px 10px",fontSize:10,color:period.weather.includes("⛈️")||period.weather.includes("🌩️")||period.weather.includes("⚡")?X.or:X.mu}}>{period.weather}</td>
+            </tr>);
+          })}
+          <tr style={{background:X.s2,borderTop:`2px solid ${X.bd}`}}>
+            <td style={{padding:"8px 10px",fontWeight:700,fontSize:12}}>รวมทั้งหมด</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,fontSize:16,color:X.b}}>{d.weather.summary.storm_total||d.weather.summary.total_11mar+d.weather.summary.total_12mar}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,fontSize:14,color:X.rd}}>{d.weather.summary.storm_power||d.weather.summary.power_11mar+d.weather.summary.power_12mar}</td>
+            <td colSpan={2} style={{padding:"8px 10px",fontSize:10,color:X.mu}}>กรมอุตุฯ ประกาศเตือนพายุฤดูร้อน ฉบับ 1-3 ครอบคลุม 14 จว. ภาคเหนือ</td>
+          </tr>
+        </tbody>
+      </table></div>
+
+      {/* Weather Correlation Analysis */}
+      <div style={{marginTop:14,padding:"12px 16px",background:"#1a2332",borderRadius:8,border:"1px solid #2a3a4a"}}>
+        <div style={{fontSize:12,fontWeight:700,color:"#f59e0b",marginBottom:8}}>🌦️ วิเคราะห์ความสัมพันธ์สภาพอากาศ × Ticket</div>
+        <div style={{fontSize:11,lineHeight:2,color:X.mu}}>
+          <div style={{marginBottom:8}}>
+            <strong style={{color:X.tx}}>📌 สถานการณ์อากาศ:</strong> กรมอุตุนิยมวิทยา ออกประกาศเตือน<strong style={{color:X.or}}> "พายุฤดูร้อน" ฉบับที่ 1-3</strong> ช่วง 11-13 มี.ค. 2569 ภาคเหนือมีพายุฝนฟ้าคะนอง ลมกระโชกแรง ลูกเห็บตก ฟ้าผ่า ครอบคลุม 14 จังหวัด ได้แก่ แม่ฮ่องสอน เชียงใหม่ เชียงราย ลำพูน ลำปาง พะเยา น่าน แพร่ อุตรดิตถ์ พิษณุโลก สุโขทัย กำแพงเพชร ตาก และเพชรบูรณ์
+          </div>
+          <div style={{marginBottom:8}}>
+            <strong style={{color:X.tx}}>⚡ ผลกระทบต่อ Network:</strong><br/>
+            • Ticket พุ่งสูงสุดช่วง <strong style={{color:X.rd}}>23:00 น. วันที่ 11 มี.ค. (40 tkts)</strong> และ <strong style={{color:X.rd}}>06:00 น. วันที่ 12 มี.ค. (56 tkts)</strong> ตรงกับช่วงพายุฝนฟ้าคะนองรุนแรง<br/>
+            • <strong style={{color:X.or}}>MAIN AC POWER FAIL</strong> พุ่งขึ้น 11 มี.ค. เวลา 18:00 (8 tkts) → เที่ยงคืน → peak 04:00-06:00 (11 tkts/ชม.) สอดคล้องกับฟ้าผ่าและไฟฟ้าขัดข้อง<br/>
+            • จังหวัดที่ได้รับผลกระทบหนักที่สุด: <strong style={{color:X.tx}}>ตาก (14 tkts/ชม.), ลำปาง (14), เชียงใหม่ (7)</strong> ในช่วง 06:00 ของ 12 มี.ค.
+          </div>
+          <div style={{marginBottom:8}}>
+            <strong style={{color:X.tx}}>📈 Pattern ที่พบ:</strong><br/>
+            • ช่วง 09:00-17:00 วันที่ 11 มี.ค. — Ticket เพิ่มขึ้นต่อเนื่อง (พายุก่อตัวช่วงบ่าย)<br/>
+            • ช่วง 18:00-01:00 — <strong style={{color:X.rd}}>Power Fail พุ่งสูงสุด</strong> (ฝนฟ้าคะนองรุนแรง+ฟ้าผ่า)<br/>
+            • ช่วง 04:00-06:00 วันที่ 12 มี.ค. — Ticket peak จากผลกระทบสะสมข้ามคืน (ตาก, ลำปาง)<br/>
+            • <strong style={{color:"#16a34a"}}>100% ของ Owner Group</strong> ในพื้นที่ NOR ตรงกับจังหวัดที่กรมอุตุฯ เตือนภัย
+          </div>
+          <div>
+            <strong style={{color:X.tx}}>💡 ข้อเสนอแนะ:</strong><br/>
+            • เตรียม UPS / Generator สำรองที่ site ในพื้นที่เสี่ยง โดยเฉพาะ ตาก, ลำปาง, เชียงใหม่<br/>
+            • วาง Standby team ช่วง 16:00-06:00 ในวันที่กรมอุตุฯ ประกาศเตือนพายุ<br/>
+            • ติดตั้ง Lightning Protection เพิ่มเติมที่ site ที่เกิด Power Fail ซ้ำ
+          </div>
+        </div>
+      </div>
+      
+      {/* References */}
+      <div style={{marginTop:10,padding:"8px 12px",background:X.s2,borderRadius:6,fontSize:9,color:X.mu}}>
+        <strong style={{color:X.tx}}>📚 แหล่งอ้างอิงพยากรณ์อากาศ:</strong><br/>
+        • กรมอุตุนิยมวิทยา — พยากรณ์อากาศภาคเหนือ 11 มี.ค. 69 (tmd.go.th/weather/region/northern)<br/>
+        • ประกาศกรมอุตุฯ ฉบับที่ 1-3 เรื่อง พายุฤดูร้อนบริเวณประเทศไทยตอนบน 11-13 มี.ค. 69<br/>
+        • กรมอุตุฯ ระบุสาเหตุ: คลื่นกระแสลมตะวันตกจากเมียนมาปะทะมวลอากาศเย็นจากจีน ขณะไทยตอนบนอากาศร้อน
+      </div>
+    </Card></div>}
+
+    {/* Owner Table */}
+    <Card title="Owner Group — คลิกแถวเพื่อดู Tickets" dot={X.b}>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+        <thead><tr>{["Owner","Reg","จังหวัด","#","SLA","<1d","<3d","<7d","<30d",">30d","Avg","Sub","Flag"].map((h,i)=>(<th key={i} style={{textAlign:i>2?"center":"left",padding:"6px 5px",fontWeight:600,fontSize:9,color:X.mu,borderBottom:`1px solid ${X.bd}`,background:X.s2,whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
+        <tbody>{d.owners.slice(0,20).map((o,i)=>{const t=AF.reduce((s,k)=>s+(o[k]||0),0);return(<tr key={i} style={{cursor:"pointer"}} onClick={()=>{setShowList(o.name);}} onMouseEnter={e=>e.currentTarget.style.background=X.s2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}><td style={{padding:"6px 5px",fontFamily:"monospace",fontWeight:700,fontSize:10,color:X.b}}>{o.name}</td><td style={{padding:"6px 5px"}}><span style={{fontFamily:"monospace",fontSize:9,padding:"1px 6px",borderRadius:3,background:o.reg==="NOR1"?`${X.b}18`:`${X.cy}18`,color:o.reg==="NOR1"?X.b:X.cy}}>{o.reg}</span></td><td style={{padding:"6px 5px",fontSize:10,color:X.mu}}>{o.prov}</td><td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:X.b,fontSize:13}}>{o.count}</td>{AF.map((k,j)=>{const v=o[k]||0;return <td key={j} style={{textAlign:"center",fontFamily:"monospace",color:v?AFC[j]:X.mu+"30",fontWeight:v?600:400,fontSize:10}}>{v||"-"}</td>;})}<td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:o.avg>10?X.rd:o.avg>1?X.or:X.gn,fontSize:10}}>{o.avg}d</td><td style={{textAlign:"center",fontFamily:"monospace",color:o.sub_total?X.pu:X.mu+"30",fontSize:10}}>{o.sub_total||"-"}</td><td style={{padding:"6px 4px",width:"12%"}}><SB items={AF.map((k,j)=>({v:o[k]||0,c:AFC[j],tc:AFT[j]}))} total={t||1} h={12}/></td></tr>);})}</tbody>
+      </table></div>
+    </Card>
+
+    {/* All Tickets Table */}
+    <div style={{marginTop:14}}><Card title={"📋 Ticket List ทั้งหมด (" + (hasFilter?filteredTickets.length:d.total) + " tickets)"} dot={X.b} defaultOpen={false}>
+      <TicketList tickets={hasFilter?filteredTickets:d.tickets} onSelect={setSelTicket}/>
+    </Card></div>
+
+    {/* District Table */}
+    <div style={{marginTop:14}}><Card title="รายอำเภอ — คลิกแถวเพื่อดู Tickets" dot={X.gn}>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+        <thead><tr>{["อำเภอ","จังหวัด","Reg","#","SLA","<1d","<3d","<7d","<30d",">30d","Avg","Sub","Flag"].map((h,i)=>(<th key={i} style={{textAlign:i>2?"center":"left",padding:"6px 5px",fontWeight:600,fontSize:9,color:X.mu,borderBottom:`1px solid ${X.bd}`,background:X.s2,whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
+        <tbody>{(d.districts||[]).filter(dd=>dd.name!=="ไม่ระบุ").slice(0,20).map((dd,i)=>{const t=AF.reduce((s,k)=>s+(dd[k]||0),0);return(<tr key={i} style={{cursor:"pointer"}} onClick={()=>setShowList("dist:"+dd.name)} onMouseEnter={e=>e.currentTarget.style.background=X.s2} onMouseLeave={e=>e.currentTarget.style.background="transparent"}><td style={{padding:"6px 5px",fontWeight:600,fontSize:11,color:X.b}}>{dd.name}</td><td style={{padding:"6px 5px",fontSize:10,color:X.mu}}>{dd.prov}</td><td style={{padding:"6px 5px"}}><span style={{fontFamily:"monospace",fontSize:9,padding:"1px 6px",borderRadius:3,background:dd.reg==="NOR1"?`${X.b}18`:`${X.cy}18`,color:dd.reg==="NOR1"?X.b:X.cy}}>{dd.reg}</span></td><td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:X.b,fontSize:13}}>{dd.count}</td>{AF.map((k,j)=>{const v=dd[k]||0;return <td key={j} style={{textAlign:"center",fontFamily:"monospace",color:v?AFC[j]:X.mu+"30",fontWeight:v?600:400,fontSize:10}}>{v||"-"}</td>;})}<td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:dd.avg>10?X.rd:dd.avg>1?X.or:X.gn,fontSize:10}}>{dd.avg}d</td><td style={{textAlign:"center",fontFamily:"monospace",color:dd.sub_total?X.pu:X.mu+"30",fontSize:10}}>{dd.sub_total||"-"}</td><td style={{padding:"6px 4px",width:"12%"}}><SB items={AF.map((k,j)=>({v:dd[k]||0,c:AFC[j],tc:AFT[j]}))} total={t||1} h={12}/></td></tr>);})}</tbody>
+      </table></div>
+    </Card></div>
+
+    {/* 5km Geo Clusters */}
+    <div style={{marginTop:14}}><Card title="📍 Site Cluster — กลุ่มไซต์ในรัศมี 5 กม. (คลิกแถวเพื่อดูบนแผนที่)" dot={X.or} defaultOpen={false}>
+      <div style={{fontSize:10,color:X.mu,marginBottom:10}}>กลุ่มไซต์ที่อยู่ใกล้กันภายในรัศมี 5 กม. — คลิกเพื่อดูตำแหน่งไซต์บนแผนที่</div>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+        <thead><tr>{["#","จังหวัด","อำเภอ","Reg","Tickets","Sites","Avg Aging","Max","SLA","<1d","<3d","<7d","<30d",">30d","Owner","ไซต์ในกลุ่ม"].map((h,i)=>(<th key={i} style={{textAlign:i>3?"center":"left",padding:"6px 5px",fontWeight:600,fontSize:9,color:X.mu,borderBottom:`1px solid ${X.bd}`,background:X.s2,whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
+        <tbody>{(d.clusters||[]).map((c,i)=>{
+          const t=AF.reduce((s,k)=>s+(c[k]||0),0);
+          const isSel=selCluster===i;
+          return(<tr key={i} onClick={()=>{setSelCluster(isSel?null:i);setCvb(null);}} style={{cursor:"pointer",borderBottom:`1px solid ${X.bd}20`,background:isSel?`${X.b}15`:i<3?`${X.rd}06`:"transparent"}} onMouseEnter={e=>{if(!isSel)e.currentTarget.style.background=X.s2;}} onMouseLeave={e=>{if(!isSel)e.currentTarget.style.background=i<3?`${X.rd}06`:"transparent";}}>
+            <td style={{padding:"6px 5px",fontFamily:"monospace",fontWeight:700,color:isSel?X.b:i<3?X.rd:X.mu}}>{i+1}</td>
+            <td style={{padding:"6px 5px",fontWeight:600}}>{c.prov||"-"}</td>
+            <td style={{padding:"6px 5px",fontSize:10,color:X.mu}}>{c.dist||"-"}</td>
+            <td style={{padding:"6px 5px"}}><span style={{fontFamily:"monospace",fontSize:9,padding:"1px 6px",borderRadius:3,background:c.reg==="NOR1"?`${X.b}18`:`${X.cy}18`,color:c.reg==="NOR1"?X.b:X.cy}}>{c.reg}</span></td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:X.b,fontSize:14}}>{c.count}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:600,color:X.tx}}>{c.sites}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:c.avg>30?X.rd:c.avg>7?X.or:c.avg>1?X.gn:"#16a34a"}}>{c.avg}d</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:X.mu}}>{c.max}d</td>
+            {AF.map((k,j)=>{const v=c[k]||0;return <td key={j} style={{textAlign:"center",fontFamily:"monospace",color:v?AFC[j]:X.mu+"30",fontWeight:v?600:400,fontSize:10}}>{v||"-"}</td>;})}
+            <td style={{padding:"6px 5px",fontSize:9,color:X.mu}}>{(c.sowners||[]).join(", ")}</td>
+            <td style={{padding:"6px 5px",fontSize:9,color:X.mu,maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={(c.site_names||[]).join(", ")}>{(c.site_names||[]).slice(0,3).join(", ")}{c.sites>3?` +${c.sites-3}`:""}</td>
+          </tr>);
+        })}</tbody>
+      </table></div>
+
+      {/* Cluster Detail — Mini Map + Site List */}
+      {selCluster!==null&&d.clusters[selCluster]&&(()=>{
+        const cl=d.clusters[selCluster];
+        const clCoords=(d.coords||[]).filter(c=>{
+          const dlat=cl.lat-c.lat,dlon=cl.lon-c.lon;
+          return Math.sqrt(dlat*dlat+dlon*dlon)<0.06;
+        });
+        return(<div style={{marginTop:14,padding:16,background:X.s2,borderRadius:8,border:`1px solid ${X.b}40`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div>
+              <div style={{fontSize:14,fontWeight:700,color:X.b}}>📍 Cluster #{selCluster+1} — {cl.prov} {cl.dist?`อ.${cl.dist}`:""}</div>
+              <div style={{fontSize:11,color:X.mu,marginTop:2}}>{cl.count} tickets | {cl.sites} sites | Avg Aging: {cl.avg}d | พิกัดศูนย์กลาง: {cl.lat}, {cl.lon}</div>
+            </div>
+            <button onClick={()=>setSelCluster(null)} style={{fontSize:10,padding:"4px 12px",borderRadius:4,border:`1px solid ${X.bd}`,background:X.s1,color:X.mu,cursor:"pointer"}}>✕ ปิด</button>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+            {/* Map with SVG/Leaflet toggle */}
+            <div>
+              <ClusterMapWrapper cluster={cl} tickets={cl.tkt||[]} onDotClick={(t)=>{const ft=(d.tickets||[]).find(x=>x.tid===t.tid);if(ft)setSelTicket(ft);}} cvb={cvb} setCvb={setCvb} cdrag={cdrag} setCdrag={setCdrag}/>
+            </div>
+            {/* Ticket Detail List */}
+            <div>
+              <div style={{fontSize:10,fontWeight:600,color:X.mu,marginBottom:6}}>รายละเอียด Ticket ({cl.count} tickets, {cl.sites} sites)</div>
+              <div style={{maxHeight:300,overflowY:"auto"}}>
+                {(()=>{
+                  const hav=(la1,lo1,la2,lo2)=>{const R=6371,dLat=(la2-la1)*Math.PI/180,dLon=(lo2-lo1)*Math.PI/180,a=Math.sin(dLat/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLon/2)**2;return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));};
+                  return (cl.tkt||[]).map((t,i)=>{
+                    const dist=hav(cl.lat,cl.lon,t.lat,t.lon).toFixed(2);
+                    return(<div key={i} style={{padding:"7px 8px",borderBottom:`1px solid ${X.bd}20`,cursor:"pointer"}} onClick={()=>{const ft=(d.tickets||[]).find(x=>x.tid===t.tid);if(ft)setSelTicket(ft);}} onMouseEnter={e=>e.currentTarget.style.background=X.s1} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                        <span style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:afC(t.af),flexShrink:0}}/>
+                        <span style={{fontFamily:"monospace",fontSize:10,fontWeight:700,color:X.b}}>{t.tid}</span>
+                        <span style={{fontFamily:"monospace",fontSize:10,fontWeight:700,color:t.aging>30?X.rd:t.aging>7?X.or:X.gn}}>{t.aging}d</span>
+                        <span style={{fontSize:9,color:X.mu,padding:"1px 5px",borderRadius:3,background:`${X.b}10`}}>{t.sev}</span>
+                        <span style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,background:priC(t.pri)+"20",color:priC(t.pri)}}>P{t.pri}</span>
+                        <span style={{fontSize:9,fontFamily:"monospace",color:X.cy,marginLeft:"auto"}}>📍 {dist} km</span>
+                      </div>
+                      <div style={{fontSize:11,fontWeight:600,marginLeft:14}}>{t.site}</div>
+                      {t.subj&&<div style={{fontSize:10,color:X.mu,marginLeft:14,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.subj}</div>}
+                      {t.cls&&<div style={{fontSize:9,color:X.cy,marginLeft:14,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📋 {t.cls}</div>}
+                    </div>);
+                  });
+                })()}
+              </div>
+              <div style={{marginTop:10,padding:8,background:X.s1,borderRadius:6,fontSize:10,color:X.mu}}>
+                <strong style={{color:X.tx}}>Owner:</strong> {(cl.sowners||[]).join(", ")}<br/>
+                <strong style={{color:X.tx}}>Aging:</strong> เฉลี่ย <strong style={{color:cl.avg>30?X.rd:cl.avg>7?X.or:X.gn}}>{cl.avg}d</strong> | สูงสุด <strong style={{color:X.rd}}>{cl.max}d</strong>
+              </div>
+            </div>
+          </div>
+        </div>);
+      })()}
+    </Card></div>
+
+    <Insight d={d}/>
+  </div>);
+};
+
+// Executive Summary Component
+const ExecSummary=()=>{
+  const tabs=Object.entries(TABS);
+  const allData=tabs.map(([id,t])=>({id,name:t.name,d:t.data}));
+  
+  return(<div>
+    {/* Overall KPI Comparison */}
+    <Card title="1. ภาพรวม Ticket ทุกประเภท — เปรียบเทียบ" dot={X.b}>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+        <thead><tr>{["ประเภท","Total","Within SLA","Over SLA","% Over","P0 (>24h)","P1 (<24h)","P2 (SLA)","Avg Aging","Max Aging","NOR1","NOR2","Subimpact"].map((h,i)=>(<th key={i} style={{textAlign:i>0?"center":"left",padding:"8px 6px",fontWeight:600,fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>{h}</th>))}</tr></thead>
+        <tbody>{allData.map(({id,name,d},i)=>{
+          const within=d.af["6) Within SLA"]||0;const over=d.total-within;const overPct=d.total?((over/d.total)*100).toFixed(1):0;
+          return(<tr key={id} style={{borderBottom:`1px solid ${X.bd}30`,background:i%2===0?"transparent":X.s2+"40"}}>
+            <td style={{padding:"8px 6px",fontWeight:700,fontSize:11}}>{name}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:800,color:X.b,fontSize:16}}>{d.total}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:"#16a34a"}}>{within}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:X.rd}}>{over}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:parseFloat(overPct)>50?X.rd:parseFloat(overPct)>30?X.or:X.gn}}>{overPct}%</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:d.priority?.p0?X.rd:X.mu+"40"}}>{d.priority?.p0||0}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:d.priority?.p1?X.or:X.mu+"40"}}>{d.priority?.p1||0}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:d.priority?.p2?"#16a34a":X.mu+"40"}}>{d.priority?.p2||0}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:d.aging_avg>10?X.rd:d.aging_avg>1?X.or:X.gn}}>{d.aging_avg}d</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:X.mu}}>{d.aging_max}d</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:X.b}}>{d.reg_sum?.NOR1?.total||0}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:X.cy}}>{d.reg_sum?.NOR2?.total||0}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:X.pu}}>{d.subimpact?.total||0}</td>
+          </tr>);
+        })}</tbody>
+      </table></div>
+    </Card>
+
+    {/* Priority Overview */}
+    <div style={{marginTop:14}}><Card title="2. Priority Overview — ทุกประเภท" dot={X.rd}>
+      <div style={{display:"grid",gridTemplateColumns:`repeat(${allData.length},1fr)`,gap:10}}>
+        {allData.map(({id,name,d})=>(<div key={id} style={{background:X.s2,borderRadius:8,padding:12,textAlign:"center"}}>
+          <div style={{fontSize:10,fontWeight:700,color:X.mu,marginBottom:8}}>{name.replace(/[📊🔴📱🌐⚠️📋]\s?/,"")}</div>
+          <div style={{display:"flex",justifyContent:"center",gap:8}}>
+            {[["P0",d.priority?.p0||0,"#dc2626"],["P1",d.priority?.p1||0,"#ea580c"],["P2",d.priority?.p2||0,"#16a34a"]].map(([l,v,c])=>(<div key={l}>
+              <div style={{fontFamily:"monospace",fontSize:18,fontWeight:800,color:c}}>{v}</div>
+              <div style={{fontSize:8,color:X.mu}}>{l}</div>
+            </div>))}
+          </div>
+          <div style={{marginTop:6}}><SB items={[{v:d.priority?.p0||0,c:"#dc2626",tc:"white"},{v:d.priority?.p1||0,c:"#ea580c",tc:"white"},{v:d.priority?.p2||0,c:"#16a34a",tc:"white"}]} total={d.total} h={14}/></div>
+        </div>))}
+      </div>
+    </Card></div>
+
+    {/* Aging Flag Comparison */}
+    <div style={{marginTop:14}}><Card title="3. Aging Flag — เปรียบเทียบทุกประเภท" dot="#16a34a">
+      {allData.map(({id,name,d})=>(<div key={id} style={{marginBottom:12,padding:10,background:X.s2,borderRadius:8}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+          <span style={{fontSize:11,fontWeight:700}}>{name}</span>
+          <span style={{fontFamily:"monospace",fontSize:12,fontWeight:700,color:X.b}}>{d.total} tkts</span>
+        </div>
+        {afSB(d.af,d.total,22)}
+      </div>))}
+      <AfLeg/>
+    </Card></div>
+
+    {/* NOR1 vs NOR2 Comparison */}
+    <div style={{marginTop:14}}><Card title="4. NOR1 vs NOR2 — เปรียบเทียบทุกประเภท" dot={X.cy}>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+        <thead><tr>{["ประเภท","NOR1 Total","NOR1 Over","NOR1 %Over","NOR2 Total","NOR2 Over","NOR2 %Over","Region ที่หนักกว่า"].map((h,i)=>(<th key={i} style={{textAlign:i>0?"center":"left",padding:"8px 6px",fontWeight:600,fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>{h}</th>))}</tr></thead>
+        <tbody>{allData.map(({id,name,d},i)=>{
+          const n1=d.reg_sum?.NOR1||{};const n2=d.reg_sum?.NOR2||{};
+          const n1t=n1.total||0;const n2t=n2.total||0;
+          const n1o=n1t-(n1["6) Within SLA"]||0);const n2o=n2t-(n2["6) Within SLA"]||0);
+          const n1p=n1t?((n1o/n1t)*100).toFixed(0):0;const n2p=n2t?((n2o/n2t)*100).toFixed(0):0;
+          const worse=n1o>n2o?"NOR1":n2o>n1o?"NOR2":"เท่ากัน";
+          return(<tr key={id} style={{borderBottom:`1px solid ${X.bd}30`}}>
+            <td style={{padding:"8px 6px",fontWeight:700}}>{name}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:X.b}}>{n1t}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:n1o?X.rd:X.gn}}>{n1o}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:parseFloat(n1p)>50?X.rd:X.or}}>{n1p}%</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:X.cy}}>{n2t}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:n2o?X.rd:X.gn}}>{n2o}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:parseFloat(n2p)>50?X.rd:X.or}}>{n2p}%</td>
+            <td style={{textAlign:"center",fontWeight:700,color:worse==="NOR1"?X.b:worse==="NOR2"?X.cy:X.gn}}>{worse}</td>
+          </tr>);
+        })}</tbody>
+      </table></div>
+    </Card></div>
+
+    {/* Top Problem Areas */}
+    <div style={{marginTop:14}}><Card title="5. Owner Group ที่ต้องเฝ้าระวัง — ทุกประเภท" dot={X.rd}>
+      {allData.map(({id,name,d})=>{
+        const worst=d.owners&&d.owners.length?d.owners.reduce((a,b)=>a.avg>b.avg?a:b):null;
+        const mostTkts=d.owners&&d.owners.length?d.owners.reduce((a,b)=>a.count>b.count?a:b):null;
+        if(!worst) return null;
+        return(<div key={id} style={{marginBottom:10,padding:10,background:X.s2,borderRadius:8}}>
+          <div style={{fontSize:11,fontWeight:700,marginBottom:4}}>{name}</div>
+          <div style={{display:"flex",gap:20,fontSize:11,color:X.mu}}>
+            <span>Aging สูงสุด: <strong style={{color:X.rd}}>{worst.name}</strong> ({worst.avg}d, {worst.count} tkts)</span>
+            <span>Ticket มากสุด: <strong style={{color:X.b}}>{mostTkts.name}</strong> ({mostTkts.count} tkts, avg {mostTkts.avg}d)</span>
+          </div>
+        </div>);
+      })}
+    </Card></div>
+
+    {/* Root Cause Summary */}
+    <div style={{marginTop:14}}><Card title="6. Root Cause หลัก — เปรียบเทียบทุกประเภท" dot={X.or}>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+        <thead><tr><th style={{textAlign:"left",padding:"8px 6px",fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>ประเภท</th><th style={{textAlign:"left",padding:"8px 6px",fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>Root Cause #1</th><th style={{textAlign:"center",padding:"8px 6px",fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>#</th><th style={{textAlign:"left",padding:"8px 6px",fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>Root Cause #2</th><th style={{textAlign:"center",padding:"8px 6px",fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>#</th><th style={{textAlign:"left",padding:"8px 6px",fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>Root Cause #3</th><th style={{textAlign:"center",padding:"8px 6px",fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>#</th></tr></thead>
+        <tbody>{allData.map(({id,name,d})=>{
+          const ra=d.root_af||[];
+          return(<tr key={id} style={{borderBottom:`1px solid ${X.bd}30`}}>
+            <td style={{padding:"8px 6px",fontWeight:700}}>{name}</td>
+            <td style={{padding:"8px 6px",fontWeight:600,color:X.tx}}>{ra[0]?.name||"-"}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:X.or}}>{ra[0]?.total||0}</td>
+            <td style={{padding:"8px 6px",color:X.mu}}>{ra[1]?.name||"-"}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:X.mu}}>{ra[1]?.total||0}</td>
+            <td style={{padding:"8px 6px",color:X.mu}}>{ra[2]?.name||"-"}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:X.mu}}>{ra[2]?.total||0}</td>
+          </tr>);
+        })}</tbody>
+      </table></div>
+    </Card></div>
+
+    {/* Need Team Summary */}
+    <div style={{marginTop:14}}><Card title="7. พื้นที่ที่แนะนำเพิ่มทีมงาน — รวมทุกประเภท" dot="#f59e0b">
+      {allData.filter(x=>x.d.need_team&&x.d.need_team.length).map(({id,name,d})=>(<div key={id} style={{marginBottom:12}}>
+        <div style={{fontSize:11,fontWeight:700,marginBottom:6}}>{name}</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {(d.need_team||[]).slice(0,3).map((t,i)=>(<div key={i} style={{background:i===0?`${X.rd}10`:X.s2,border:`1px solid ${i===0?X.rd+"30":X.bd}`,borderRadius:8,padding:"8px 12px",minWidth:180}}>
+            <div style={{fontSize:10,fontWeight:700,color:i===0?X.rd:X.tx}}>#{i+1} {t.name}</div>
+            <div style={{fontSize:10,color:X.mu}}>{t.prov} ({t.reg})</div>
+            <div style={{fontFamily:"monospace",fontSize:11,marginTop:4}}><span style={{color:X.b}}>{t.count} tkts</span> × <span style={{color:t.avg>30?X.rd:X.or}}>{t.avg}d</span> = <span style={{fontWeight:700,color:"#f59e0b"}}>Score {t.score}</span></div>
+          </div>))}
+        </div>
+      </div>))}
+    </Card></div>
+
+    {/* Executive Recommendations */}
+    <div style={{marginTop:14,padding:"18px 20px",background:X.s1,border:`1px solid ${X.bd}`,borderLeft:`4px solid ${X.or}`,borderRadius:8}}>
+      <div style={{fontSize:15,fontWeight:800,color:X.tx,marginBottom:14,paddingBottom:10,borderBottom:`1px solid ${X.bd}`}}>8. ข้อเสนอแนะเชิงบริหาร (Executive Recommendations)</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,fontSize:12,lineHeight:1.9}}>
+        <div>
+          <div style={{fontWeight:700,color:X.rd,marginBottom:4,fontSize:12}}>🔴 เร่งด่วน (Immediate Action)</div>
+          <div style={{color:X.mu}}>
+            {(()=>{const t1=TABS.tab1?.data;const p0=t1?.priority?.p0||0;return p0>0?<>• P0 tickets จำนวน <strong style={{color:X.rd}}>{p0}</strong> tickets เกิน SLA มากกว่า 24 ชม. — ต้อง escalate ทันที<br/></>:null;})()}
+            {(()=>{const t1=TABS.tab1?.data;const o30=t1?.af["1) OverSLA : > 30 days"]||0;return o30>0?<>• Aging &gt;30 วัน จำนวน <strong style={{color:"#991b1b"}}>{o30}</strong> tickets — ต้องจัดทีมเฉพาะกิจ<br/></>:null;})()}
+            {(()=>{const t1=TABS.tab1?.data;const w=t1?.insight;return w&&w.worst?<>• Owner <strong style={{color:X.rd}}>{w.worst}</strong> มี Avg Aging สูงสุด ({w.worst_avg}d) — ต้องทบทวนกระบวนการ<br/></>:null;})()}
+          </div>
+        </div>
+        <div>
+          <div style={{fontWeight:700,color:X.or,marginBottom:4,fontSize:12}}>🟠 ระยะสั้น (Short-term)</div>
+          <div style={{color:X.mu}}>
+            {(()=>{const i=TABS.tab1?.data?.insight;return i&&i.nor1_over>i.nor2_over?<>• NOR1 มี Over SLA สูงกว่า NOR2 — ควรเพิ่ม resource ใน NOR1<br/></>:null;})()}
+            • เตรียม Standby team ช่วง 16:00-06:00 ในวันที่กรมอุตุฯ ประกาศเตือนพายุ<br/>
+            {(()=>{const nt=TABS.tab1?.data?.need_team;return nt&&nt[0]?<>• เพิ่มทีมที่ <strong style={{color:X.tx}}>{nt[0].name}</strong> ({nt[0].prov}) — Score สูงสุด {nt[0].score}<br/></>:null;})()}
+          </div>
+        </div>
+        <div>
+          <div style={{fontWeight:700,color:X.b,marginBottom:4,fontSize:12}}>🔵 ระยะกลาง (Medium-term)</div>
+          <div style={{color:X.mu}}>
+            • ติดตั้ง UPS/Generator สำรองที่ site ในพื้นที่เสี่ยงพายุ<br/>
+            • เพิ่ม Lightning Protection ที่ site ที่เกิด MAIN AC POWER FAIL ซ้ำ<br/>
+            • ทบทวน SLA process กับ Owner Group ที่มี Aging สูงเป็นประจำ<br/>
+          </div>
+        </div>
+        <div>
+          <div style={{fontWeight:700,color:X.gn,marginBottom:4,fontSize:12}}>🟢 ระยะยาว (Long-term)</div>
+          <div style={{color:X.mu}}>
+            {(()=>{const b=TABS.tab1?.data?.insight;return b?<>• ศึกษา best practice จาก <strong style={{color:X.gn}}>{b.best}</strong> (Avg ต่ำสุด {b.best_avg}d) เพื่อขยายผล<br/></>:null;})()}
+            • พัฒนาระบบ auto-alert เมื่อ ticket ใกล้ถึง SLA<br/>
+            • วิเคราะห์ Trend ย้อนหลังเพื่อ preventive maintenance<br/>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>);
+};
+
+function App(){
+  const[tab,setTab]=useState("tab1");
+  const[theme,setTheme]=useState("calm");
+  X=THEMES[theme];
+  const cur=TABS[tab];
+  const now=new Date();
+  const reportDate=`${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()+543}`;
+  return(<div style={{background:X.bg,minHeight:"100vh",color:X.tx,fontFamily:"'Inter','Sarabun',system-ui,sans-serif",transition:"background 0.3s"}}>
+    {/* Google Font */}
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+    
+    {/* Report Header */}
+    <div style={{padding:"16px 28px",borderBottom:`2px solid ${X.bd}`,background:X.s1}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:16}}>
+          <img src={LOGO} alt="BBTEC" style={{height:64,borderRadius:8}}/>
+          <div>
+            <h1 style={{fontSize:22,fontWeight:800,margin:0,letterSpacing:"-0.3px"}}><span style={{color:"#3b5998"}}>BBTEC</span> <span style={{color:X.tx}}>Intelligent Dashboard</span></h1>
+            <div style={{fontSize:10,fontWeight:600,color:X.mu,textTransform:"uppercase",letterSpacing:1.5,marginTop:2}}>Network Operations Center — Northern Region</div>
+            <div style={{display:"flex",gap:12,marginTop:4,fontSize:11,color:X.mu}}>
+              <span>พื้นที่: <strong style={{color:X.tx}}>NOR1 & NOR2</strong></span>
+              <span style={{color:X.bd}}>|</span>
+              <span>ขอบเขต: <strong style={{color:X.tx}}>ภาคเหนือ 14 จังหวัด</strong></span>
+              <span style={{color:X.bd}}>|</span>
+              <span>ไม่รวม: <strong style={{color:X.mu}}>UN-NPMECT-RF</strong></span>
+            </div>
+          </div>
+        </div>
+        <div style={{textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+          <div style={{display:"flex",gap:3}}>
+            {Object.entries(THEMES).map(([k,t])=>(<button key={k} onClick={()=>setTheme(k)} style={{fontSize:9,padding:"3px 8px",borderRadius:4,border:`1px solid ${theme===k?X.b:X.bd}`,background:theme===k?`${X.b}15`:X.s2,color:theme===k?X.b:X.mu,cursor:"pointer"}}>{t.name.split(" ")[0]}</button>))}
+          </div>
+          <div style={{display:"flex",gap:16,alignItems:"flex-end"}}>
+            <div>
+              <div style={{fontSize:9,color:X.mu,textTransform:"uppercase",letterSpacing:1}}>Data as of</div>
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:15,fontWeight:700,color:X.cy}}>{cur?cur.data.itime:"-"}</div>
+            </div>
+            <div>
+              <div style={{fontSize:9,color:X.mu,textTransform:"uppercase",letterSpacing:1}}>Report Date</div>
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:13,fontWeight:600,color:X.tx}}>{reportDate}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Tab Navigation */}
+    <div style={{padding:"10px 28px",borderBottom:`1px solid ${X.bd}`,display:"flex",gap:6,flexWrap:"wrap",background:X.bg}}>
+      <button onClick={()=>setTab("summary")} style={{fontFamily:"'Inter','Sarabun',sans-serif",fontSize:11,padding:"6px 16px",borderRadius:6,border:`1px solid ${tab==="summary"?"#f59e0b":X.bd}`,cursor:"pointer",background:tab==="summary"?"#f59e0b15":X.s1,color:tab==="summary"?"#f59e0b":X.mu,fontWeight:tab==="summary"?700:500}}>📊 Executive Summary</button>
+      {Object.entries(TABS).map(([id,t])=>{
+        const active=tab===id;
+        return(<button key={id} onClick={()=>setTab(id)} style={{fontFamily:"'Inter','Sarabun',sans-serif",fontSize:11,padding:"6px 16px",borderRadius:6,border:`1px solid ${active?X.b:X.bd}`,cursor:"pointer",background:active?`${X.b}15`:X.s1,color:active?X.b:X.mu,fontWeight:active?700:500,letterSpacing:active?0.3:0,transition:"all 0.2s"}}>{t.name} <span style={{fontWeight:800}}>({t.data.total})</span></button>);
+      })}
+    </div>
+
+    {/* Content */}
+    <div style={{padding:"20px 28px",maxWidth:1500,margin:"0 auto"}}>
+      {tab==="summary"?<ExecSummary/>:cur&&<TabContent data={cur.data}/>}
+    </div>
+    
+    {/* Footer */}
+    <div style={{padding:"12px 28px",borderTop:`1px solid ${X.bd}`,background:X.s1,display:"flex",justifyContent:"space-between",fontSize:10,color:X.mu}}>
+      <span>BBTEC Intelligent Dashboard — NOC Northern Region</span>
+      <span>Confidential — Internal Use Only</span>
+    </div>
+  </div>);
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
