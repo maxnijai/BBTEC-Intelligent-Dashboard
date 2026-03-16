@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: update-dashboard-main
+  group: update-dashboard
   cancel-in-progress: true
 
 jobs:
@@ -17,18 +17,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          persist-credentials: true
           fetch-depth: 0
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
-      - name: Install libraries
+      - name: Install packages
         run: |
           pip install openpyxl
           pip install google-api-python-client google-auth google-auth-httplib2
@@ -37,10 +36,10 @@ jobs:
         run: |
           echo '${{ secrets.GOOGLE_SERVICE_KEY }}' > service_account.json
 
-      - name: Run dashboard
+      - name: Run dashboard script
         run: python auto_dashboard.py
 
-      - name: Commit and push dashboard
+      - name: Commit dashboard
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
