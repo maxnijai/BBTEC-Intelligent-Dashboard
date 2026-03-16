@@ -3,7 +3,6 @@ name: Update Dashboard
 on:
   schedule:
     - cron: "*/5 * * * *"
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,26 +12,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          persist-credentials: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: install libraries
+        run: |
+          pip install openpyxl
+          pip install google-api-python-client google-auth google-auth-httplib2
 
-      - name: Run dashboard script
+      - name: restore google key
+        run: |
+          echo '${{ secrets.GOOGLE_SERVICE_KEY }}' > service_account.json
+
+      - name: run dashboard
         run: python auto_dashboard.py
 
-      - name: Commit and push changes
+      - name: push dashboard
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
           git add dashboard_output/dashboard.html
-          git commit -m "update dashboard" || echo "no change"
-          git push origin main
+          git commit -m "auto dashboard update" || echo "no change"
+          git push
