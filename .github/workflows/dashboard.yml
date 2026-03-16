@@ -46,7 +46,10 @@ jobs:
 
           git add dashboard_output/dashboard.html last_processed.txt
 
-          git diff --cached --quiet && echo "no change" && exit 0
+          if git diff --cached --quiet; then
+            echo "no change"
+            exit 0
+          fi
 
           git commit -m "auto dashboard update"
           git pull --rebase origin main
