@@ -644,7 +644,7 @@ def check():
         if not tabs_data:
             return
 
-                        OUTPUT_DIR.mkdir(exist_ok=True)
+        OUTPUT_DIR.mkdir(exist_ok=True)
         html = gen_html(tabs_data, fn)
         out = OUTPUT_DIR / "dashboard.html"
 
