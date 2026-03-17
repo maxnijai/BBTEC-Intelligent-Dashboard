@@ -56,10 +56,19 @@ jobs:
 
       - name: Send Telegram message
         run: |
-          MESSAGE="BBTEC Intelligent Dashboard Updated
+          SOURCE_FILE=$(python -c "import json; print(json.load(open('dashboard_output/summary.json', encoding='utf-8'))['source_file'])")
+          TOTAL_TICKETS=$(python -c "import json; print(json.load(open('dashboard_output/summary.json', encoding='utf-8'))['total_tickets'])")
+
+          MESSAGE=$(cat <<EOF
+          BBTEC Intelligent Dashboard Updated
+
+          Source file: $SOURCE_FILE
+          Total tickets: $TOTAL_TICKETS
 
           Dashboard:
-          https://maxnijai.github.io/BBTEC-Intelligent-Dashboard/dashboard_output/dashboard.html"
+          https://maxnijai.github.io/BBTEC-Intelligent-Dashboard/dashboard_output/dashboard.html
+          EOF
+          )
 
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
