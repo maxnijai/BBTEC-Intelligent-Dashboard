@@ -648,13 +648,26 @@ def check():
         html = gen_html(tabs_data, fn)
         out = OUTPUT_DIR / "dashboard.html"
 
-        with open(out, "w", encoding="utf-8") as f:
+                with open(out, "w", encoding="utf-8") as f:
             f.write(html)
+
+        total = sum(t["data"]["total"] for t in tabs_data.values())
+
+        summary = {
+            "source_file": fn,
+            "total_tickets": total,
+            "tabs": len(tabs_data),
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+        summary_file = OUTPUT_DIR / "summary.json"
+        with open(summary_file, "w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
 
         set_last(sig)
 
         print("\n  Dashboard updated! -> " + str(out))
-        total = sum(t["data"]["total"] for t in tabs_data.values())
+        print("  Summary updated! -> " + str(summary_file))
         print("  Total: " + str(total) + " tickets across " + str(len(tabs_data)) + " tabs")
 
     except Exception as e:
