@@ -46,8 +46,9 @@ jobs:
 
       - name: Install Playwright
         run: |
-          npm install -g playwright
-          playwright install --with-deps chromium
+          npm init -y
+          npm install playwright
+          npx playwright install --with-deps chromium
 
       - name: Capture dashboard screenshot
         run: |
