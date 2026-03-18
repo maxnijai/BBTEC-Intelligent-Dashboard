@@ -85,7 +85,8 @@ jobs:
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
 
-          git add dashboard_output/dashboard.html dashboard_output/dashboard.png dashboard_output/dashboard-debug.png dashboard_output/summary.json last_processed.txt
+          # ลบ dashboard_output/dashboard-debug.png ออกจากบรรทัดนี้
+          git add dashboard_output/dashboard.html dashboard_output/dashboard.png dashboard_output/summary.json last_processed.txt
 
           if git diff --cached --quiet; then
             echo "no change"
