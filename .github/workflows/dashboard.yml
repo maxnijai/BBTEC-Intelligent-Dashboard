@@ -53,6 +53,7 @@ jobs:
       - name: Capture dashboard screenshot
         run: |
           rm -f dashboard_output/dashboard.png dashboard_output/dashboard-debug.png
+
           python -m http.server 8000 &
           sleep 3
 
@@ -65,13 +66,15 @@ jobs:
               viewport: { width: 1600, height: 1800 }
             });
 
-            await page.goto('http://127.0.0.1:8000/dashboard_output/dashboard.html', {
+            await page.goto('http://127.0.0.1:8000/dashboard_output/dashboard.html#executive-summary', {
               waitUntil: 'networkidle'
             });
 
-            await page.screenshot({
-              path: 'dashboard_output/dashboard-debug.png',
-              fullPage: true
+            const card = page.locator('#executive-summary-tab');
+            await card.waitFor({ state: 'visible', timeout: 30000 });
+
+            await card.screenshot({
+              path: 'dashboard_output/dashboard.png'
             });
 
             await browser.close();
@@ -79,7 +82,6 @@ jobs:
           EOF
 
           node capture.js
-
       - name: Commit dashboard
         run: |
           git config --global user.name "github-actions"
