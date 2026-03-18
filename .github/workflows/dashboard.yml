@@ -70,19 +70,10 @@ jobs:
               waitUntil: 'networkidle'
             });
 
-            await page.getByRole('button', { name: /Executive Summary/i }).click();
-            await page.waitForTimeout(3000);
-
-            await page.getByRole('button', { name: /Executive Summary/i }).click();
-            await page.waitForTimeout(3000);
-
-            await page.evaluate(() => {
-              document.body.style.background = 'white';      
-            });
-
             await page.screenshot({
               path: 'dashboard_output/dashboard.png',
               clip: { x: 200, y: 140, width: 1200, height: 1100 }
+            });
             });
 
             await browser.close();
