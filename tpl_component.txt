@@ -725,59 +725,114 @@ const ExecSummary=()=>{
   const tabs=Object.entries(TABS);
   const allData=tabs.map(([id,t])=>({id,name:t.name,d:t.data}));
   
-  return(<div>
-    {/* Overall KPI Comparison */}
-    <Card title="1. ภาพรวม Ticket ทุกประเภท — เปรียบเทียบ" dot={X.b}>
-      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-        <thead><tr>{["ประเภท","Total","Within SLA","Over SLA","% Over","P0 (>24h)","P1 (<24h)","P2 (SLA)","Avg Aging","Max Aging","NOR1","NOR2","Subimpact"].map((h,i)=>(<th key={i} style={{textAlign:i>0?"center":"left",padding:"8px 6px",fontWeight:600,fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>{h}</th>))}</tr></thead>
-        <tbody>{allData.map(({id,name,d},i)=>{
-          const within=d.af["6) Within SLA"]||0;const over=d.total-within;const overPct=d.total?((over/d.total)*100).toFixed(1):0;
-          return(<tr key={id} style={{borderBottom:`1px solid ${X.bd}30`,background:i%2===0?"transparent":X.s2+"40"}}>
-            <td style={{padding:"8px 6px",fontWeight:700,fontSize:11}}>{name}</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:800,color:X.b,fontSize:16}}>{d.total}</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:"#16a34a"}}>{within}</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:X.rd}}>{over}</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:parseFloat(overPct)>50?X.rd:parseFloat(overPct)>30?X.or:X.gn}}>{overPct}%</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:d.priority?.p0?X.rd:X.mu+"40"}}>{d.priority?.p0||0}</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:d.priority?.p1?X.or:X.mu+"40"}}>{d.priority?.p1||0}</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:d.priority?.p2?"#16a34a":X.mu+"40"}}>{d.priority?.p2||0}</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:d.aging_avg>10?X.rd:d.aging_avg>1?X.or:X.gn}}>{d.aging_avg}d</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",color:X.mu}}>{d.aging_max}d</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",color:X.b}}>{d.reg_sum?.NOR1?.total||0}</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",color:X.cy}}>{d.reg_sum?.NOR2?.total||0}</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",color:X.pu}}>{d.subimpact?.total||0}</td>
-          </tr>);
-        })}</tbody>
-      </table></div>
-    </Card>
-
-    {/* Priority Overview */}
-    <div style={{marginTop:14}}><Card title="2. Priority Overview — ทุกประเภท" dot={X.rd}>
-      <div style={{display:"grid",gridTemplateColumns:`repeat(${allData.length},1fr)`,gap:10}}>
-        {allData.map(({id,name,d})=>(<div key={id} style={{background:X.s2,borderRadius:8,padding:12,textAlign:"center"}}>
-          <div style={{fontSize:10,fontWeight:700,color:X.mu,marginBottom:8}}>{name.replace(/[📊🔴📱🌐⚠️📋]\s?/,"")}</div>
-          <div style={{display:"flex",justifyContent:"center",gap:8}}>
-            {[["P0",d.priority?.p0||0,"#dc2626"],["P1",d.priority?.p1||0,"#ea580c"],["P2",d.priority?.p2||0,"#16a34a"]].map(([l,v,c])=>(<div key={l}>
-              <div style={{fontFamily:"monospace",fontSize:18,fontWeight:800,color:c}}>{v}</div>
-              <div style={{fontSize:8,color:X.mu}}>{l}</div>
-            </div>))}
+  return(
+    <div id="executive-summary-tab">
+      {/* Overall KPI Comparison */}
+      <div id="executive-summary-overall-kpi">
+        <Card title="1. ภาพรวม Ticket ทุกประเภท — เปรียบเทียบ" dot={X.b}>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+              <thead>
+                <tr>
+                  {["ประเภท","Total","Within SLA","Over SLA","% Over","P0 (>24h)","P1 (<24h)","P2 (SLA)","Avg Aging","Max Aging","NOR1","NOR2","Subimpact"].map((h,i)=>(
+                    <th
+                      key={i}
+                      style={{
+                        textAlign:i>0?"center":"left",
+                        padding:"8px 6px",
+                        fontWeight:600,
+                        fontSize:10,
+                        color:X.mu,
+                        borderBottom:`2px solid ${X.bd}`,
+                        background:X.s2
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {allData.map(({id,name,d},i)=>{
+                  const within=d.af["6) Within SLA"]||0;
+                  const over=d.total-within;
+                  const overPct=d.total?((over/d.total)*100).toFixed(1):0;
+                  return(
+                    <tr key={id} style={{borderBottom:`1px solid ${X.bd}30`,background:i%2===0?"transparent":X.s2+"40"}}>
+                      <td style={{padding:"8px 6px",fontWeight:700,fontSize:11}}>{name}</td>
+                      <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:800,color:X.b,fontSize:16}}>{d.total}</td>
+                      <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:"#16a34a"}}>{within}</td>
+                      <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:X.rd}}>{over}</td>
+                      <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:parseFloat(overPct)>50?X.rd:parseFloat(overPct)>30?X.or:X.gn}}>{overPct}%</td>
+                      <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:d.priority?.p0?X.rd:X.mu+"40"}}>{d.priority?.p0||0}</td>
+                      <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:d.priority?.p1?X.or:X.mu+"40"}}>{d.priority?.p1||0}</td>
+                      <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:d.priority?.p2?"#16a34a":X.mu+"40"}}>{d.priority?.p2||0}</td>
+                      <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:d.aging_avg>10?X.rd:d.aging_avg>1?X.or:X.gn}}>{d.aging_avg}d</td>
+                      <td style={{textAlign:"center",fontFamily:"monospace",color:X.mu}}>{d.aging_max}d</td>
+                      <td style={{textAlign:"center",fontFamily:"monospace",color:X.b}}>{d.reg_sum?.NOR1?.total||0}</td>
+                      <td style={{textAlign:"center",fontFamily:"monospace",color:X.cy}}>{d.reg_sum?.NOR2?.total||0}</td>
+                      <td style={{textAlign:"center",fontFamily:"monospace",color:X.pu}}>{d.subimpact?.total||0}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <div style={{marginTop:6}}><SB items={[{v:d.priority?.p0||0,c:"#dc2626",tc:"white"},{v:d.priority?.p1||0,c:"#ea580c",tc:"white"},{v:d.priority?.p2||0,c:"#16a34a",tc:"white"}]} total={d.total} h={14}/></div>
-        </div>))}
+        </Card>
       </div>
-    </Card></div>
 
-    {/* Aging Flag Comparison */}
-    <div style={{marginTop:14}}><Card title="3. Aging Flag — เปรียบเทียบทุกประเภท" dot="#16a34a">
-      {allData.map(({id,name,d})=>(<div key={id} style={{marginBottom:12,padding:10,background:X.s2,borderRadius:8}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-          <span style={{fontSize:11,fontWeight:700}}>{name}</span>
-          <span style={{fontFamily:"monospace",fontSize:12,fontWeight:700,color:X.b}}>{d.total} tkts</span>
-        </div>
-        {afSB(d.af,d.total,22)}
-      </div>))}
-      <AfLeg/>
-    </Card></div>
+      {/* Priority Overview */}
+      <div id="executive-summary-priority" style={{marginTop:14}}>
+        <Card title="2. Priority Overview — ทุกประเภท" dot={X.rd}>
+          <div style={{display:"grid",gridTemplateColumns:`repeat(${allData.length},1fr)`,gap:10}}>
+            {allData.map(({id,name,d})=>(
+              <div key={id} style={{background:X.s2,borderRadius:8,padding:12,textAlign:"center"}}>
+                <div style={{fontSize:10,fontWeight:700,color:X.mu,marginBottom:8}}>
+                  {name.replace(/[📊🔴📱🌐⚠️📋]\s?/,"")}
+                </div>
+                <div style={{display:"flex",justifyContent:"center",gap:8}}>
+                  {[["P0",d.priority?.p0||0,"#dc2626"],["P1",d.priority?.p1||0,"#ea580c"],["P2",d.priority?.p2||0,"#16a34a"]].map(([l,v,c])=>(
+                    <div key={l}>
+                      <div style={{fontFamily:"monospace",fontSize:18,fontWeight:800,color:c}}>{v}</div>
+                      <div style={{fontSize:8,color:X.mu}}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{marginTop:6}}>
+                  <SB
+                    items={[
+                      {v:d.priority?.p0||0,c:"#dc2626",tc:"white"},
+                      {v:d.priority?.p1||0,c:"#ea580c",tc:"white"},
+                      {v:d.priority?.p2||0,c:"#16a34a",tc:"white"}
+                    ]}
+                    total={d.total}
+                    h={14}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* Aging Flag Comparison */}
+      <div id="executive-summary-aging-flag" style={{marginTop:14}}>
+        <Card title="3. Aging Flag — เปรียบเทียบทุกประเภท" dot="#16a34a">
+          {allData.map(({id,name,d})=>(
+            <div key={id} style={{marginBottom:12,padding:10,background:X.s2,borderRadius:8}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <span style={{fontSize:11,fontWeight:700}}>{name}</span>
+                <span style={{fontFamily:"monospace",fontSize:12,fontWeight:700,color:X.b}}>{d.total} tkts</span>
+              </div>
+              {afSB(d.af,d.total,22)}
+            </div>
+          ))}
+          <AfLeg/>
+        </Card>
+      </div>
+    </div>
+  );
+};
 
     {/* NOR1 vs NOR2 Comparison */}
     <div style={{marginTop:14}}><Card title="4. NOR1 vs NOR2 — เปรียบเทียบทุกประเภท" dot={X.cy}>
