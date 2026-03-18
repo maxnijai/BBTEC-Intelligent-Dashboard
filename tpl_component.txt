@@ -949,7 +949,7 @@ const ExecSummary=()=>{
 };
 
 function App(){
-  const initialTab = window.location.hash === '#executive-summary' ? 'exec' : Object.keys(TABS)[0];
+  const initialTab = window.location.hash === '#executive-summary' ? 'summary' : Object.keys(TABS)[0];
   const [tab, setTab] = useState(initialTab);
   const[theme,setTheme]=useState("calm");
   X=THEMES[theme];
