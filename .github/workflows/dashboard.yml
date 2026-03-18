@@ -75,7 +75,7 @@ jobs:
 
             await page.screenshot({
               path: 'dashboard_output/dashboard.png',
-              fullPage: true
+              clip: { x: 200, y: 140, width: 1200, height: 1100 }
             });
 
             await browser.close();
