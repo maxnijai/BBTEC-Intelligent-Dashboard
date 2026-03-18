@@ -68,7 +68,12 @@ jobs:
               waitUntil: 'networkidle'
             });
 
+            await page.getByText('Executive Summary').click();
+            await page.waitForTimeout(2000);
+
             const card = page.locator('#executive-summary-overall-kpi');
+            await card.waitFor({ state: 'visible', timeout: 30000 });
+
             await card.screenshot({
               path: 'dashboard_output/dashboard.png'
             });
