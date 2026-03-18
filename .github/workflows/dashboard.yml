@@ -52,6 +52,7 @@ jobs:
 
       - name: Capture dashboard screenshot
         run: |
+          rm -f dashboard_output/dashboard.png dashboard_output/dashboard-debug.png
           python -m http.server 8000 &
           sleep 3
 
