@@ -66,18 +66,14 @@ jobs:
               viewport: { width: 1600, height: 1800 }
             });
 
-            await page.goto('http://127.0.0.1:8000/dashboard_output/dashboard.html', {
+            // 🔥 เปิดไปที่ Executive Summary โดยตรง
+            await page.goto('http://127.0.0.1:8000/dashboard_output/dashboard.html#executive-summary', {
               waitUntil: 'networkidle'
             });
 
-            // คลิกแท็บ Executive Summary
-            await page.getByRole('button', { name: /Executive Summary/i }).click();
-
-            // รอให้ section นี้แสดงจริง
             const card = page.locator('#executive-summary-tab');
             await card.waitFor({ state: 'visible', timeout: 30000 });
 
-            // แคปทั้ง Executive Summary
             await card.screenshot({
               path: 'dashboard_output/dashboard.png'
             });
