@@ -74,9 +74,8 @@ jobs:
               path: 'dashboard_output/dashboard.png',
               clip: { x: 200, y: 140, width: 1200, height: 1100 }
             });
-            });
 
-            await browser.close();
+            await browser.close(); // ย้ายเข้ามาไว้ข้างในปีกกาของ async
           })();
           EOF
 
@@ -101,16 +100,13 @@ jobs:
           SOURCE_FILE=$(python -c "import json; print(json.load(open('dashboard_output/summary.json', encoding='utf-8'))['source_file'])")
           TOTAL_TICKETS=$(python -c "import json; print(json.load(open('dashboard_output/summary.json', encoding='utf-8'))['total_tickets'])")
 
-          CAPTION=$(cat <<EOF
-          BBTEC Intelligent Dashboard Updated
+          CAPTION="BBTEC Intelligent Dashboard Updated
 
           Source file: $SOURCE_FILE
           Total tickets: $TOTAL_TICKETS
 
           Dashboard:
-          https://maxnijai.github.io/BBTEC-Intelligent-Dashboard/dashboard_output/dashboard.html
-          EOF
-          )
+          https://maxnijai.github.io/BBTEC-Intelligent-Dashboard/dashboard_output/dashboard.html"
 
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendPhoto" \
             -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
