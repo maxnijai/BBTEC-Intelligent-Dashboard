@@ -938,4 +938,190 @@ function App(){
   </div>);
 }
 
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App))
+    {/* NOR1 vs NOR2 Comparison */}
+    <div style={{marginTop:14}}><Card title="4. NOR1 vs NOR2 — เปรียบเทียบทุกประเภท" dot={X.cy}>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+        <thead><tr>{["ประเภท","NOR1 Total","NOR1 Over","NOR1 %Over","NOR2 Total","NOR2 Over","NOR2 %Over","Region ที่หนักกว่า"].map((h,i)=>(<th key={i} style={{textAlign:i>0?"center":"left",padding:"8px 6px",fontWeight:600,fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>{h}</th>))}</tr></thead>
+        <tbody>{allData.map(({id,name,d},i)=>{
+          const n1=d.reg_sum?.NOR1||{};const n2=d.reg_sum?.NOR2||{};
+          const n1t=n1.total||0;const n2t=n2.total||0;
+          const n1o=n1t-(n1["6) Within SLA"]||0);const n2o=n2t-(n2["6) Within SLA"]||0);
+          const n1p=n1t?((n1o/n1t)*100).toFixed(0):0;const n2p=n2t?((n2o/n2t)*100).toFixed(0):0;
+          const worse=n1o>n2o?"NOR1":n2o>n1o?"NOR2":"เท่ากัน";
+          return(<tr key={id} style={{borderBottom:`1px solid ${X.bd}30`}}>
+            <td style={{padding:"8px 6px",fontWeight:700}}>{name}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:X.b}}>{n1t}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:n1o?X.rd:X.gn}}>{n1o}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:parseFloat(n1p)>50?X.rd:X.or}}>{n1p}%</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:X.cy}}>{n2t}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:n2o?X.rd:X.gn}}>{n2o}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:parseFloat(n2p)>50?X.rd:X.or}}>{n2p}%</td>
+            <td style={{textAlign:"center",fontWeight:700,color:worse==="NOR1"?X.b:worse==="NOR2"?X.cy:X.gn}}>{worse}</td>
+          </tr>);
+        })}</tbody>
+      </table></div>
+    </Card></div>
+
+    {/* Top Problem Areas */}
+    <div style={{marginTop:14}}><Card title="5. Owner Group ที่ต้องเฝ้าระวัง — ทุกประเภท" dot={X.rd}>
+      {allData.map(({id,name,d})=>{
+        const worst=d.owners&&d.owners.length?d.owners.reduce((a,b)=>a.avg>b.avg?a:b):null;
+        const mostTkts=d.owners&&d.owners.length?d.owners.reduce((a,b)=>a.count>b.count?a:b):null;
+        if(!worst) return null;
+        return(<div key={id} style={{marginBottom:10,padding:10,background:X.s2,borderRadius:8}}>
+          <div style={{fontSize:11,fontWeight:700,marginBottom:4}}>{name}</div>
+          <div style={{display:"flex",gap:20,fontSize:11,color:X.mu}}>
+            <span>Aging สูงสุด: <strong style={{color:X.rd}}>{worst.name}</strong> ({worst.avg}d, {worst.count} tkts)</span>
+            <span>Ticket มากสุด: <strong style={{color:X.b}}>{mostTkts.name}</strong> ({mostTkts.count} tkts, avg {mostTkts.avg}d)</span>
+          </div>
+        </div>);
+      })}
+    </Card></div>
+
+    {/* Root Cause Summary */}
+    <div style={{marginTop:14}}><Card title="6. Root Cause หลัก — เปรียบเทียบทุกประเภท" dot={X.or}>
+      <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+        <thead><tr><th style={{textAlign:"left",padding:"8px 6px",fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>ประเภท</th><th style={{textAlign:"left",padding:"8px 6px",fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>Root Cause #1</th><th style={{textAlign:"center",padding:"8px 6px",fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>#</th><th style={{textAlign:"left",padding:"8px 6px",fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>Root Cause #2</th><th style={{textAlign:"center",padding:"8px 6px",fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>#</th><th style={{textAlign:"left",padding:"8px 6px",fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>Root Cause #3</th><th style={{textAlign:"center",padding:"8px 6px",fontSize:10,color:X.mu,borderBottom:`2px solid ${X.bd}`,background:X.s2}}>#</th></tr></thead>
+        <tbody>{allData.map(({id,name,d})=>{
+          const ra=d.root_af||[];
+          return(<tr key={id} style={{borderBottom:`1px solid ${X.bd}30`}}>
+            <td style={{padding:"8px 6px",fontWeight:700}}>{name}</td>
+            <td style={{padding:"8px 6px",fontWeight:600,color:X.tx}}>{ra[0]?.name||"-"}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:X.or}}>{ra[0]?.total||0}</td>
+            <td style={{padding:"8px 6px",color:X.mu}}>{ra[1]?.name||"-"}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:X.mu}}>{ra[1]?.total||0}</td>
+            <td style={{padding:"8px 6px",color:X.mu}}>{ra[2]?.name||"-"}</td>
+            <td style={{textAlign:"center",fontFamily:"monospace",color:X.mu}}>{ra[2]?.total||0}</td>
+          </tr>);
+        })}</tbody>
+      </table></div>
+    </Card></div>
+
+    {/* Need Team Summary */}
+    <div style={{marginTop:14}}><Card title="7. พื้นที่ที่แนะนำเพิ่มทีมงาน — รวมทุกประเภท" dot="#f59e0b">
+      {allData.filter(x=>x.d.need_team&&x.d.need_team.length).map(({id,name,d})=>(<div key={id} style={{marginBottom:12}}>
+        <div style={{fontSize:11,fontWeight:700,marginBottom:6}}>{name}</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {(d.need_team||[]).slice(0,3).map((t,i)=>(<div key={i} style={{background:i===0?`${X.rd}10`:X.s2,border:`1px solid ${i===0?X.rd+"30":X.bd}`,borderRadius:8,padding:"8px 12px",minWidth:180}}>
+            <div style={{fontSize:10,fontWeight:700,color:i===0?X.rd:X.tx}}>#{i+1} {t.name}</div>
+            <div style={{fontSize:10,color:X.mu}}>{t.prov} ({t.reg})</div>
+            <div style={{fontFamily:"monospace",fontSize:11,marginTop:4}}><span style={{color:X.b}}>{t.count} tkts</span> × <span style={{color:t.avg>30?X.rd:X.or}}>{t.avg}d</span> = <span style={{fontWeight:700,color:"#f59e0b"}}>Score {t.score}</span></div>
+          </div>))}
+        </div>
+      </div>))}
+    </Card></div>
+
+    {/* Executive Recommendations */}
+    <div style={{marginTop:14,padding:"18px 20px",background:X.s1,border:`1px solid ${X.bd}`,borderLeft:`4px solid ${X.or}`,borderRadius:8}}>
+      <div style={{fontSize:15,fontWeight:800,color:X.tx,marginBottom:14,paddingBottom:10,borderBottom:`1px solid ${X.bd}`}}>8. ข้อเสนอแนะเชิงบริหาร (Executive Recommendations)</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,fontSize:12,lineHeight:1.9}}>
+        <div>
+          <div style={{fontWeight:700,color:X.rd,marginBottom:4,fontSize:12}}>🔴 เร่งด่วน (Immediate Action)</div>
+          <div style={{color:X.mu}}>
+            {(()=>{const t1=TABS.tab1?.data;const p0=t1?.priority?.p0||0;return p0>0?<>• P0 tickets จำนวน <strong style={{color:X.rd}}>{p0}</strong> tickets เกิน SLA มากกว่า 24 ชม. — ต้อง escalate ทันที<br/></>:null;})()}
+            {(()=>{const t1=TABS.tab1?.data;const o30=t1?.af["1) OverSLA : > 30 days"]||0;return o30>0?<>• Aging &gt;30 วัน จำนวน <strong style={{color:"#991b1b"}}>{o30}</strong> tickets — ต้องจัดทีมเฉพาะกิจ<br/></>:null;})()}
+            {(()=>{const t1=TABS.tab1?.data;const w=t1?.insight;return w&&w.worst?<>• Owner <strong style={{color:X.rd}}>{w.worst}</strong> มี Avg Aging สูงสุด ({w.worst_avg}d) — ต้องทบทวนกระบวนการ<br/></>:null;})()}
+          </div>
+        </div>
+        <div>
+          <div style={{fontWeight:700,color:X.or,marginBottom:4,fontSize:12}}>🟠 ระยะสั้น (Short-term)</div>
+          <div style={{color:X.mu}}>
+            {(()=>{const i=TABS.tab1?.data?.insight;return i&&i.nor1_over>i.nor2_over?<>• NOR1 มี Over SLA สูงกว่า NOR2 — ควรเพิ่ม resource ใน NOR1<br/></>:null;})()}
+            • เตรียม Standby team ช่วง 16:00-06:00 ในวันที่กรมอุตุฯ ประกาศเตือนพายุ<br/>
+            {(()=>{const nt=TABS.tab1?.data?.need_team;return nt&&nt[0]?<>• เพิ่มทีมที่ <strong style={{color:X.tx}}>{nt[0].name}</strong> ({nt[0].prov}) — Score สูงสุด {nt[0].score}<br/></>:null;})()}
+          </div>
+        </div>
+        <div>
+          <div style={{fontWeight:700,color:X.b,marginBottom:4,fontSize:12}}>🔵 ระยะกลาง (Medium-term)</div>
+          <div style={{color:X.mu}}>
+            • ติดตั้ง UPS/Generator สำรองที่ site ในพื้นที่เสี่ยงพายุ<br/>
+            • เพิ่ม Lightning Protection ที่ site ที่เกิด MAIN AC POWER FAIL ซ้ำ<br/>
+            • ทบทวน SLA process กับ Owner Group ที่มี Aging สูงเป็นประจำ<br/>
+          </div>
+        </div>
+        <div>
+          <div style={{fontWeight:700,color:X.gn,marginBottom:4,fontSize:12}}>🟢 ระยะยาว (Long-term)</div>
+          <div style={{color:X.mu}}>
+            {(()=>{const b=TABS.tab1?.data?.insight;return b?<>• ศึกษา best practice จาก <strong style={{color:X.gn}}>{b.best}</strong> (Avg ต่ำสุด {b.best_avg}d) เพื่อขยายผล<br/></>:null;})()}
+            • พัฒนาระบบ auto-alert เมื่อ ticket ใกล้ถึง SLA<br/>
+            • วิเคราะห์ Trend ย้อนหลังเพื่อ preventive maintenance<br/>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+  );
+};
+
+
+function App(){
+  const initialTab = window.location.hash === '#executive-summary' ? 'summary' : Object.keys(TABS)[0];
+  const [tab, setTab] = useState(initialTab);
+  const[theme,setTheme]=useState("calm");
+  X=THEMES[theme];
+  const cur=TABS[tab];
+  const now=new Date();
+  const reportDate=`${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()+543}`;
+  return(<div style={{background:X.bg,minHeight:"100vh",color:X.tx,fontFamily:"'Inter','Sarabun',system-ui,sans-serif",transition:"background 0.3s"}}>
+    {/* Google Font */}
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+    
+    {/* Report Header */}
+    <div style={{padding:"16px 28px",borderBottom:`2px solid ${X.bd}`,background:X.s1}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:16}}>
+          <img src={LOGO} alt="BBTEC" style={{height:64,borderRadius:8}}/>
+          <div>
+            <h1 style={{fontSize:22,fontWeight:800,margin:0,letterSpacing:"-0.3px"}}><span style={{color:"#3b5998"}}>BBTEC</span> <span style={{color:X.tx}}>Intelligent Dashboard</span></h1>
+            <div style={{fontSize:10,fontWeight:600,color:X.mu,textTransform:"uppercase",letterSpacing:1.5,marginTop:2}}>Network Operations Center — Northern Region</div>
+            <div style={{display:"flex",gap:12,marginTop:4,fontSize:11,color:X.mu}}>
+              <span>พื้นที่: <strong style={{color:X.tx}}>NOR1 & NOR2</strong></span>
+              <span style={{color:X.bd}}>|</span>
+              <span>ขอบเขต: <strong style={{color:X.tx}}>ภาคเหนือ 14 จังหวัด</strong></span>
+              <span style={{color:X.bd}}>|</span>
+              <span>ไม่รวม: <strong style={{color:X.mu}}>UN-NPMECT-RF</strong></span>
+            </div>
+          </div>
+        </div>
+        <div style={{textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+          <div style={{display:"flex",gap:3}}>
+            {Object.entries(THEMES).map(([k,t])=>(<button key={k} onClick={()=>setTheme(k)} style={{fontSize:9,padding:"3px 8px",borderRadius:4,border:`1px solid ${theme===k?X.b:X.bd}`,background:theme===k?`${X.b}15`:X.s2,color:theme===k?X.b:X.mu,cursor:"pointer"}}>{t.name.split(" ")[0]}</button>))}
+          </div>
+          <div style={{display:"flex",gap:16,alignItems:"flex-end"}}>
+            <div>
+              <div style={{fontSize:9,color:X.mu,textTransform:"uppercase",letterSpacing:1}}>Data as of</div>
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:15,fontWeight:700,color:X.cy}}>{cur?cur.data.itime:"-"}</div>
+            </div>
+            <div>
+              <div style={{fontSize:9,color:X.mu,textTransform:"uppercase",letterSpacing:1}}>Report Date</div>
+              <div style={{fontFamily:"'Inter',sans-serif",fontSize:13,fontWeight:600,color:X.tx}}>{reportDate}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Tab Navigation */}
+    <div style={{padding:"10px 28px",borderBottom:`1px solid ${X.bd}`,display:"flex",gap:6,flexWrap:"wrap",background:X.bg}}>
+      <button onClick={()=>setTab("summary")} style={{fontFamily:"'Inter','Sarabun',sans-serif",fontSize:11,padding:"6px 16px",borderRadius:6,border:`1px solid ${tab==="summary"?"#f59e0b":X.bd}`,cursor:"pointer",background:tab==="summary"?"#f59e0b15":X.s1,color:tab==="summary"?"#f59e0b":X.mu,fontWeight:tab==="summary"?700:500}}>📊 Executive Summary</button>
+      {Object.entries(TABS).map(([id,t])=>{
+        const active=tab===id;
+        return(<button key={id} onClick={()=>setTab(id)} style={{fontFamily:"'Inter','Sarabun',sans-serif",fontSize:11,padding:"6px 16px",borderRadius:6,border:`1px solid ${active?X.b:X.bd}`,cursor:"pointer",background:active?`${X.b}15`:X.s1,color:active?X.b:X.mu,fontWeight:active?700:500,letterSpacing:active?0.3:0,transition:"all 0.2s"}}>{t.name} <span style={{fontWeight:800}}>({t.data.total})</span></button>);
+      })}
+    </div>
+
+    {/* Content */}
+    <div style={{padding:"20px 28px",maxWidth:1500,margin:"0 auto"}}>
+      {tab==="summary"?<ExecSummary/>:cur&&<TabContent data={cur.data}/>}
+    </div>
+    
+    {/* Footer */}
+    <div style={{padding:"12px 28px",borderTop:`1px solid ${X.bd}`,background:X.s1,display:"flex",justifyContent:"space-between",fontSize:10,color:X.mu}}>
+      <span>BBTEC Intelligent Dashboard — NOC Northern Region</span>
+      <span>Confidential — Internal Use Only</span>
+    </div>
+  </div>);
+}
+
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
