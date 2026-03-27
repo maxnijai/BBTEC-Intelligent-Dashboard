@@ -59,7 +59,6 @@ const TMap=({coords,districts,onDotClick})=>{
     <svg viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} style={{width:"100%",height:420,background:X.mapBg,borderRadius:8,cursor:drag?"grabbing":"grab"}} onWheel={onWheel} onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU} onMouseLeave={onMU}>
       {PV.map((p,i)=><path key={i} d={pp(p.p)} fill={`hsl(${140+i*3},25%,${18+i}%)`} stroke="#4a7a44" strokeWidth={0.8/sc} opacity={0.85}/>)}
       {PV.map((p,i)=>{const c=cn(p.p);return <text key={`l${i}`} x={tX(c[0])} y={tY(c[1])} textAnchor="middle" fill={sc>1.3?"rgba(255,255,255,0.5)":"rgba(255,255,255,0.25)"} fontSize={sc>1.5?6/sc*1.5:7/sc}>{p.n}</text>;})}
-      
       {coords.map((c,i)=>(<circle key={`h${i}`} cx={tX(c.lon)} cy={tY(c.lat)} r={14/sc} fill={afC(c.af)} opacity={0.1}/>))}
       {coords.map((c,i)=>(<circle key={i} cx={tX(c.lon)} cy={tY(c.lat)} r={hov===i?7/sc:Math.max(2,3.5/sc)} fill={afC(c.af)} stroke="rgba(255,255,255,0.4)" strokeWidth={hov===i?2/sc:0.3/sc} style={{cursor:"pointer"}} onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)} onClick={(e)=>{e.stopPropagation();onDotClick&&onDotClick(c);}}/>))}
       {dists.map((d,i)=>{const r=Math.max(8,Math.min(20,d.count*1.5))/sc;return(<g key={`d${i}`}><circle cx={tX(d.lon)} cy={tY(d.lat)} r={r} fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth={1/sc} strokeDasharray={`${3/sc},${2/sc}`}/>{sc>1.5&&<text x={tX(d.lon)} y={tY(d.lat)+r+8/sc} textAnchor="middle" fill="rgba(255,255,255,0.5)" fontSize={6/sc}>{d.name}({d.count})</text>}</g>);})}
@@ -109,8 +108,6 @@ const LMap=({coords,districts,onDotClick})=>{
         attribution:'&copy; OpenStreetMap',maxZoom:18,opacity:0.9
       }).addTo(map);
       mapInst.current=map;
-      
-      });
       
       // Ticket dots
       (coords||[]).forEach(c=>{
@@ -479,29 +476,13 @@ const TabContent=({data})=>{
       <Card title="Root Cause × Aging Flag" dot={X.rd}>{d.root_af.slice(0,6).map((r,i)=>(<div key={i} style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:10,marginBottom:3}}><span style={{fontWeight:600}}>{r.name}</span><span style={{fontFamily:"monospace",color:X.mu}}>{r.total}</span></div>{afSB(r,r.total,16)}</div>))}<div style={{marginTop:6}}><AfLeg/></div></Card>
     </div>
     {/* Fire Analysis vs Sites */}
-    {d.fire&&<div style={{marginTop:14}}><Card title={`🔥 วิเคราะห์จุดไฟไหม้เทียบกับไซต์ (ข้อมูล NASA FIRMS — อัปเดต ${d.fire.fetched_at||"-"})`} dot={X.rd} defaultOpen={false}>
-
-      {/* KPI Summary */}
+    {d.fire&&<div style={{marginTop:14}}><Card title={`🔥 วิเคราะห์จุดไฟไหม้เทียบกับไซต์ (NASA FIRMS — อัปเดต ${d.fire.fetched_at||"-"}`} dot={X.rd} defaultOpen={false}>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:14}}>
-        <div style={{background:X.s2,borderRadius:8,padding:"10px 14px",textAlign:"center",border:`1px solid ${X.bd}`}}>
-          <div style={{fontFamily:"monospace",fontSize:22,fontWeight:800,color:X.rd}}>{d.fire.summary.total_hotspots}</div>
-          <div style={{fontSize:9,color:X.mu,marginTop:2}}>🔥 Hotspot ภาคเหนือ (24h)</div>
-        </div>
-        <div style={{background:X.s2,borderRadius:8,padding:"10px 14px",textAlign:"center",border:`1px solid ${X.bd}`}}>
-          <div style={{fontFamily:"monospace",fontSize:22,fontWeight:800,color:X.or}}>{d.fire.summary.sites_at_risk}</div>
-          <div style={{fontSize:9,color:X.mu,marginTop:2}}>🗼 ไซต์เสี่ยง (รัศมี 10 กม.)</div>
-        </div>
-        <div style={{background:X.s2,borderRadius:8,padding:"10px 14px",textAlign:"center",border:`1px solid ${X.bd}`}}>
-          <div style={{fontFamily:"monospace",fontSize:22,fontWeight:800,color:"#f59e0b"}}>{d.fire.summary.tickets_near_fire}</div>
-          <div style={{fontSize:9,color:X.mu,marginTop:2}}>🎫 Ticket ใกล้จุดไฟ (≤5 กม.)</div>
-        </div>
-        <div style={{background:X.s2,borderRadius:8,padding:"10px 14px",textAlign:"center",border:`1px solid ${X.bd}`}}>
-          <div style={{fontFamily:"monospace",fontSize:20,fontWeight:800,color:X.rd}}>{d.fire.summary.critical_sites}</div>
-          <div style={{fontSize:9,color:X.mu,marginTop:2}}>🚨 วิกฤต (จุดไฟ &lt;1 กม.)</div>
-        </div>
+        <div style={{background:X.s2,borderRadius:8,padding:"10px 14px",textAlign:"center",border:`1px solid ${X.bd}`}}><div style={{fontFamily:"monospace",fontSize:22,fontWeight:800,color:X.rd}}>{d.fire.summary.total_hotspots}</div><div style={{fontSize:9,color:X.mu,marginTop:2}}>🔥 Hotspot ภาคเหนือ (24h)</div></div>
+        <div style={{background:X.s2,borderRadius:8,padding:"10px 14px",textAlign:"center",border:`1px solid ${X.bd}`}}><div style={{fontFamily:"monospace",fontSize:22,fontWeight:800,color:X.or}}>{d.fire.summary.sites_at_risk}</div><div style={{fontSize:9,color:X.mu,marginTop:2}}>🗼 ไซต์เสี่ยง (รัศมี 10 กม.)</div></div>
+        <div style={{background:X.s2,borderRadius:8,padding:"10px 14px",textAlign:"center",border:`1px solid ${X.bd}`}}><div style={{fontFamily:"monospace",fontSize:22,fontWeight:800,color:"#f59e0b"}}>{d.fire.summary.tickets_near_fire}</div><div style={{fontSize:9,color:X.mu,marginTop:2}}>🎫 Ticket ใกล้จุดไฟ (≤5 กม.)</div></div>
+        <div style={{background:X.s2,borderRadius:8,padding:"10px 14px",textAlign:"center",border:`1px solid ${X.bd}`}}><div style={{fontFamily:"monospace",fontSize:20,fontWeight:800,color:X.rd}}>{d.fire.summary.critical_sites}</div><div style={{fontSize:9,color:X.mu,marginTop:2}}>🚨 วิกฤต (จุดไฟ &lt;1 กม.)</div></div>
       </div>
-
-      {/* Correlation Stats */}
       {d.fire.correlation&&<div style={{padding:"12px 16px",background:X.s2,borderRadius:8,border:`1px solid ${X.bd}`,marginBottom:14}}>
         <div style={{fontSize:11,fontWeight:700,color:X.or,marginBottom:10}}>📊 เปรียบเทียบ: Ticket ใกล้จุดไฟ vs ห่างจุดไฟ</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,fontSize:11}}>
@@ -537,87 +518,24 @@ const TabContent=({data})=>{
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{d.fire.correlation.top_roots_near_fire.map((r,i)=>(<span key={i} style={{fontSize:9,padding:"3px 8px",borderRadius:4,background:`${[X.rd,X.or,X.b,X.cy,X.gn][i%5]}18`,color:[X.rd,X.or,X.b,X.cy,X.gn][i%5],fontWeight:600}}>{r.name} ({r.count})</span>))}</div>
         </div>}
       </div>}
-
-      {/* Province heatmap */}
       {d.fire.by_province&&d.fire.by_province.length>0&&<div style={{marginBottom:14}}>
         <div style={{fontSize:11,fontWeight:700,color:X.mu,marginBottom:8}}>🗺️ ความหนาแน่น Hotspot รายจังหวัด (24h)</div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {d.fire.by_province.slice(0,10).map((p,i)=>{
-            const maxH=d.fire.by_province[0]?.hotspots||1;
-            const pct=Math.round(p.hotspots/maxH*100);
-            const color=pct>70?X.rd:pct>40?X.or:"#f59e0b";
-            return(<div key={i} style={{background:X.s2,borderRadius:6,padding:"6px 10px",border:`1px solid ${color}30`,minWidth:110}}>
-              <div style={{fontSize:10,fontWeight:700,color:X.tx}}>{p.prov}</div>
-              <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
-                <div style={{flex:1,height:4,background:X.bd,borderRadius:2,overflow:"hidden"}}>
-                  <div style={{height:"100%",width:`${pct}%`,background:color,borderRadius:2}}/>
-                </div>
-                <span style={{fontFamily:"monospace",fontSize:11,fontWeight:700,color}}>{p.hotspots}</span>
-              </div>
-            </div>);
-          })}
-        </div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{d.fire.by_province.slice(0,10).map((p,i)=>{const maxH=d.fire.by_province[0]?.hotspots||1;const pct=Math.round(p.hotspots/maxH*100);const color=pct>70?X.rd:pct>40?X.or:"#f59e0b";return(<div key={i} style={{background:X.s2,borderRadius:6,padding:"6px 10px",border:`1px solid ${color}30`,minWidth:110}}><div style={{fontSize:10,fontWeight:700,color:X.tx}}>{p.prov}</div><div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}><div style={{flex:1,height:4,background:X.bd,borderRadius:2,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:color,borderRadius:2}}/></div><span style={{fontFamily:"monospace",fontSize:11,fontWeight:700,color}}>{p.hotspots}</span></div></div>);})}</div>
       </div>}
-
-      {/* Site risk table */}
-      <div style={{fontSize:11,fontWeight:700,color:X.mu,marginBottom:8}}>📍 ไซต์ที่อยู่ใกล้จุดไฟไหม้ (เรียงตาม Risk Score)</div>
+      <div style={{fontSize:11,fontWeight:700,color:X.mu,marginBottom:8}}>📍 ไซต์เสี่ยงสูงสุด (เรียงตาม Risk Score)</div>
       <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-        <thead><tr>
-          {["ไซต์","จังหวัด","Reg","🔥 ใกล้สุด (กม.)","Hotspot ≤5กม.","Ticket","Avg Aging","Over SLA","Power Fail","Risk Score","ระดับเสี่ยง"].map((h,i)=>(
-            <th key={i} style={{textAlign:i>2?"center":"left",padding:"7px 8px",fontSize:9,color:X.mu,borderBottom:`1px solid ${X.bd}`,background:X.s2,whiteSpace:"nowrap"}}>{h}</th>
-          ))}
-        </tr></thead>
-        <tbody>{(d.fire.sites||[]).map((s,si)=>{
-          const riskColor=s.risk_score>=50?X.rd:s.risk_score>=30?X.or:"#f59e0b";
-          const riskLabel=s.risk_score>=50?"🔴 วิกฤต":s.risk_score>=30?"🟠 สูง":"🟡 ปานกลาง";
-          return(<tr key={si} style={{background:s.risk_score>=50?`${X.rd}08`:"transparent",borderBottom:`1px solid ${X.bd}20`}}>
-            <td style={{padding:"7px 8px",fontWeight:700,fontFamily:"monospace",fontSize:10,color:X.b}}>{s.site}</td>
-            <td style={{padding:"7px 8px",fontSize:10,color:X.mu}}>{s.prov}</td>
-            <td style={{padding:"7px 8px"}}><span style={{fontFamily:"monospace",fontSize:9,padding:"1px 6px",borderRadius:3,background:s.reg==="NOR1"?`${X.b}18`:`${X.cy}18`,color:s.reg==="NOR1"?X.b:X.cy}}>{s.reg}</span></td>
-            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:s.nearest_km<1?X.rd:s.nearest_km<3?X.or:"#f59e0b"}}>{s.nearest_km.toFixed(1)}</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:s.count_5km>10?X.rd:s.count_5km>5?X.or:"#f59e0b"}}>{s.count_5km}</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",color:s.open_tickets?X.b:X.mu+"40"}}>{s.open_tickets||"-"}</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",color:s.avg_aging>10?X.rd:s.avg_aging>3?X.or:X.gn}}>{s.avg_aging}d</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",color:s.over_sla?X.rd:X.mu+"40"}}>{s.over_sla||"-"}</td>
-            <td style={{textAlign:"center",fontSize:12}}>{s.has_power_fail?"⚡":"-"}</td>
-            <td style={{textAlign:"center",fontFamily:"monospace",fontWeight:800,color:riskColor}}>{s.risk_score}</td>
-            <td style={{padding:"7px 8px",fontWeight:700,color:riskColor,whiteSpace:"nowrap"}}>{riskLabel}</td>
-          </tr>);
-        })}</tbody>
+        <thead><tr>{["ไซต์","จังหวัด","Reg","🔥 ใกล้สุด (กม.)","Hotspot ≤5กม.","Ticket","Avg Aging","Over SLA","Power Fail","Risk Score","ระดับเสี่ยง"].map((h,i)=>(<th key={i} style={{textAlign:i>2?"center":"left",padding:"7px 8px",fontSize:9,color:X.mu,borderBottom:`1px solid ${X.bd}`,background:X.s2,whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
+        <tbody>{(d.fire.sites||[]).map((s,si)=>{const riskColor=s.risk_score>=50?X.rd:s.risk_score>=30?X.or:"#f59e0b";const riskLabel=s.risk_score>=50?"🔴 วิกฤต":s.risk_score>=30?"🟠 สูง":"🟡 ปานกลาง";return(<tr key={si} style={{background:s.risk_score>=50?`${X.rd}08`:"transparent",borderBottom:`1px solid ${X.bd}20`}}><td style={{padding:"7px 8px",fontWeight:700,fontFamily:"monospace",fontSize:10,color:X.b}}>{s.site}</td><td style={{padding:"7px 8px",fontSize:10,color:X.mu}}>{s.prov}</td><td style={{padding:"7px 8px"}}><span style={{fontFamily:"monospace",fontSize:9,padding:"1px 6px",borderRadius:3,background:s.reg==="NOR1"?`${X.b}18`:`${X.cy}18`,color:s.reg==="NOR1"?X.b:X.cy}}>{s.reg}</span></td><td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:s.nearest_km<1?X.rd:s.nearest_km<3?X.or:"#f59e0b"}}>{s.nearest_km.toFixed(1)}</td><td style={{textAlign:"center",fontFamily:"monospace",fontWeight:700,color:s.count_5km>10?X.rd:s.count_5km>5?X.or:"#f59e0b"}}>{s.count_5km}</td><td style={{textAlign:"center",fontFamily:"monospace",color:s.open_tickets?X.b:X.mu+"40"}}>{s.open_tickets||"-"}</td><td style={{textAlign:"center",fontFamily:"monospace",color:s.avg_aging>10?X.rd:s.avg_aging>3?X.or:X.gn}}>{s.avg_aging}d</td><td style={{textAlign:"center",fontFamily:"monospace",color:s.over_sla?X.rd:X.mu+"40"}}>{s.over_sla||"-"}</td><td style={{textAlign:"center",fontSize:12}}>{s.has_power_fail?"⚡":"-"}</td><td style={{textAlign:"center",fontFamily:"monospace",fontWeight:800,color:riskColor}}>{s.risk_score}</td><td style={{padding:"7px 8px",fontWeight:700,color:riskColor,whiteSpace:"nowrap"}}>{riskLabel}</td></tr>);})}</tbody>
       </table></div>
-
-      {/* Intelligent analysis box */}
       <div style={{marginTop:14,padding:"14px 16px",background:"#1a2332",borderRadius:8,border:"1px solid #2a3a4a"}}>
         <div style={{fontSize:12,fontWeight:700,color:"#f59e0b",marginBottom:10}}>🧠 วิเคราะห์ความสัมพันธ์จุดไฟไหม้ × ไซต์ (อัตโนมัติ)</div>
         <div style={{fontSize:11,lineHeight:1.9,color:X.mu}}>
-          <div style={{marginBottom:8}}>
-            <strong style={{color:X.tx}}>📌 สถานการณ์ปัจจุบัน:</strong>{" "}
-            พบ <strong style={{color:X.rd}}>{d.fire.summary.total_hotspots} จุดความร้อน</strong> ใน 14 จังหวัดภาคเหนือ (ข้อมูล NASA FIRMS VIIRS/MODIS 24h){" "}
-            มีไซต์เสี่ยง <strong style={{color:X.or}}>{d.fire.summary.sites_at_risk} ไซต์</strong>{" "}
-            {d.fire.summary.critical_sites>0&&<>โดยวิกฤต <strong style={{color:X.rd}}>{d.fire.summary.critical_sites} ไซต์</strong> (จุดไฟ &lt;1 กม.)</>}
-          </div>
-          {d.fire.correlation&&<div style={{marginBottom:8}}>
-            <strong style={{color:X.tx}}>⚡ Correlation ที่พบ:</strong><br/>
-            {d.fire.correlation.aging_ratio>1.2&&<>• Ticket ใกล้จุดไฟมี Avg Aging <strong style={{color:X.rd}}>{d.fire.correlation.near_avg_aging}d</strong> สูงกว่าพื้นที่ทั่วไป <strong style={{color:X.rd}}>{d.fire.correlation.aging_ratio}×</strong><br/></>}
-            {d.fire.correlation.power_ratio>1.3&&<>• Power Fail ใกล้จุดไฟสูงกว่าปกติ <strong style={{color:X.rd}}>{d.fire.correlation.power_ratio}×</strong> ({d.fire.correlation.near_power_pct}% vs {d.fire.correlation.far_power_pct}%)<br/></>}
-            {d.fire.correlation.near_over_sla_pct>d.fire.correlation.far_over_sla_pct&&<>• Over SLA ในพื้นที่ใกล้ไฟ <strong style={{color:X.or}}>{d.fire.correlation.near_over_sla_pct}%</strong> vs {d.fire.correlation.far_over_sla_pct}% (ห่างไฟ)<br/></>}
-            {d.fire.summary.top_province&&<>• จังหวัดที่มี Hotspot หนาแน่นสูงสุด: <strong style={{color:X.tx}}>{d.fire.summary.top_province}</strong><br/></>}
-          </div>}
-          <div>
-            <strong style={{color:X.tx}}>💡 ข้อเสนอแนะ:</strong><br/>
-            {d.fire.summary.critical_sites>0&&<>• ส่งทีม <strong style={{color:X.rd}}>Preventive Maintenance ทันที</strong> ที่ {d.fire.summary.critical_sites} ไซต์วิกฤต (&lt;1 กม. จากจุดไฟ)<br/></>}
-            • เพิ่มความถี่การ clean filter/ตรวจ cooling ไซต์ในรัศมี 5 กม. จากจุดไฟ<br/>
-            • Standby spare (fan, PSU, filter) ที่คลังใกล้จังหวัดเสี่ยงสูงสุด<br/>
-            • ติดตาม FIRMS daily alert — อัปเดตทุก run cycle อัตโนมัติ
-          </div>
+          <div style={{marginBottom:8}}><strong style={{color:X.tx}}>📌 สถานการณ์ปัจจุบัน:</strong>{" "}พบ <strong style={{color:X.rd}}>{d.fire.summary.total_hotspots} จุดความร้อน</strong> ใน 14 จังหวัดภาคเหนือ (NASA FIRMS VIIRS/MODIS 24h){" "}มีไซต์เสี่ยง <strong style={{color:X.or}}>{d.fire.summary.sites_at_risk} ไซต์</strong>{" "}{d.fire.summary.critical_sites>0&&<>โดยวิกฤต <strong style={{color:X.rd}}>{d.fire.summary.critical_sites} ไซต์</strong> (จุดไฟ &lt;1 กม.)</>}</div>
+          {d.fire.correlation&&<div style={{marginBottom:8}}><strong style={{color:X.tx}}>⚡ Correlation ที่พบ:</strong><br/>{d.fire.correlation.aging_ratio>1.2&&<>• Ticket ใกล้จุดไฟมี Avg Aging <strong style={{color:X.rd}}>{d.fire.correlation.near_avg_aging}d</strong> สูงกว่าพื้นที่ทั่วไป <strong style={{color:X.rd}}>{d.fire.correlation.aging_ratio}×</strong><br/></>}{d.fire.correlation.power_ratio>1.3&&<>• Power Fail ใกล้จุดไฟสูงกว่าปกติ <strong style={{color:X.rd}}>{d.fire.correlation.power_ratio}×</strong> ({d.fire.correlation.near_power_pct}% vs {d.fire.correlation.far_power_pct}%)<br/></>}{d.fire.correlation.near_over_sla_pct>d.fire.correlation.far_over_sla_pct&&<>• Over SLA ในพื้นที่ใกล้ไฟ <strong style={{color:X.or}}>{d.fire.correlation.near_over_sla_pct}%</strong> vs {d.fire.correlation.far_over_sla_pct}% (ห่างไฟ)<br/></>}{d.fire.summary.top_province&&<>• จังหวัดที่มี Hotspot หนาแน่นสูงสุด: <strong style={{color:X.tx}}>{d.fire.summary.top_province}</strong><br/></>}</div>}
+          <div><strong style={{color:X.tx}}>💡 ข้อเสนอแนะ:</strong><br/>{d.fire.summary.critical_sites>0&&<>• ส่งทีม <strong style={{color:X.rd}}>Preventive Maintenance ทันที</strong> ที่ {d.fire.summary.critical_sites} ไซต์วิกฤต (&lt;1 กม. จากจุดไฟ)<br/></>}• เพิ่มความถี่การ clean filter/ตรวจ cooling ไซต์ในรัศมี 5 กม. จากจุดไฟ<br/>• Standby spare (fan, PSU, filter) ที่คลังใกล้จังหวัดเสี่ยงสูงสุด<br/>• ติดตาม FIRMS daily alert — อัปเดตทุก run cycle อัตโนมัติ</div>
         </div>
       </div>
-
-      <div style={{marginTop:8,padding:"6px 12px",background:X.s2,borderRadius:6,fontSize:9,color:X.mu}}>
-        <strong style={{color:X.tx}}>📡 แหล่งข้อมูล:</strong>{" "}
-        NASA FIRMS VIIRS/SUOMI-NPP & MODIS NRT — firms.modaps.eosdis.nasa.gov{" "}|{" "}
-        อัปเดตอัตโนมัติทุก run cycle | ข้อมูล ณ {d.fire.fetched_at||"-"}
-      </div>
+      <div style={{marginTop:8,padding:"6px 12px",background:X.s2,borderRadius:6,fontSize:9,color:X.mu}}>NASA FIRMS VIIRS/SUOMI-NPP &amp; MODIS NRT — firms.modaps.eosdis.nasa.gov | อัปเดตอัตโนมัติทุก run cycle | ข้อมูล ณ {d.fire.fetched_at||"-"}</div>
     </Card></div>}
 
         {/* Owner Table */}
