@@ -9,12 +9,32 @@ from datetime import datetime, timedelta
 from math import atan2, cos, radians, sin, sqrt
 from pathlib import Path
 
+import csv
+import urllib.request
+import urllib.error
 import openpyxl
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
 GDRIVE_FOLDER_ID = "188bv1FhdU2A64wjJjkntkKFIGZG18nMJ"
+
+# NASA FIRMS - VIIRS NOAA-20 (NRT) 24h - no API key required for public CSV
+# Coverage: Thailand bounding box (lat 5-21, lon 97-106)
+FIRMS_URL = (
+    "https://firms.modaps.eosdis.nasa.gov/api/country/csv/"
+    "2f5e32d9c58a0b96e61e43c9de47bd38/"  # public map key
+    "VIIRS_SNPP_NRT/THA/1"               # Thailand, 1 day
+)
+# Fallback: MODIS NRT (broader coverage, lower resolution)
+FIRMS_MODIS_URL = (
+    "https://firms.modaps.eosdis.nasa.gov/api/country/csv/"
+    "2f5e32d9c58a0b96e61e43c9de47bd38/"
+    "MODIS_NRT/THA/1"
+)
+# Northern Thailand bounding box
+NORTH_LAT_MIN, NORTH_LAT_MAX = 15.0, 21.0
+NORTH_LON_MIN, NORTH_LON_MAX = 97.0, 102.5
 
 SCRIPT_DIR = Path(__file__).parent
 OUTPUT_DIR = SCRIPT_DIR / "dashboard_output"
@@ -365,6 +385,247 @@ def process_excel(fp):
             },
         }
 
+    def fetch_firms_hotspots():
+        """Fetch real-time fire hotspots from NASA FIRMS API (VIIRS + MODIS NRT).
+        Returns list of dicts: {lat, lon, brightness, frp, acq_date, acq_time, confidence, instrument}
+        """
+        hotspots = []
+        urls = [
+            (FIRMS_URL, "VIIRS_SNPP"),
+            (FIRMS_MODIS_URL, "MODIS"),
+        ]
+        for url, instrument in urls:
+            try:
+                req = urllib.request.Request(
+                    url,
+                    headers={"User-Agent": "BBTEC-Dashboard/1.0"}
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    raw = resp.read().decode("utf-8")
+                reader = csv.DictReader(raw.splitlines())
+                for row in reader:
+                    try:
+                        lat = float(row.get("latitude") or row.get("lat") or 0)
+                        lon = float(row.get("longitude") or row.get("lon") or 0)
+                        # Filter to Northern Thailand only
+                        if not (NORTH_LAT_MIN <= lat <= NORTH_LAT_MAX and
+                                NORTH_LON_MIN <= lon <= NORTH_LON_MAX):
+                            continue
+                        brightness = float(row.get("bright_ti4") or row.get("brightness") or 0)
+                        frp = float(row.get("frp") or 0)
+                        confidence = str(row.get("confidence") or "n")
+                        acq_date = str(row.get("acq_date") or "")
+                        acq_time = str(row.get("acq_time") or "")
+                        hotspots.append({
+                            "lat": round(lat, 4),
+                            "lon": round(lon, 4),
+                            "brightness": round(brightness, 1),
+                            "frp": round(frp, 2),
+                            "confidence": confidence,
+                            "acq_date": acq_date,
+                            "acq_time": acq_time,
+                            "instrument": instrument,
+                        })
+                    except (ValueError, KeyError):
+                        continue
+                print(f"  FIRMS {instrument}: {len(hotspots)} hotspots in Northern Thailand")
+            except urllib.error.URLError as e:
+                print(f"  FIRMS {instrument} fetch failed: {e}")
+            except Exception as e:
+                print(f"  FIRMS {instrument} error: {e}")
+        return hotspots
+
+    def build_fire(rows, hotspots):
+        """Correlate NASA FIRMS hotspots with ticket sites.
+        Analyzes proximity, risk levels, and correlation with ticket surge/root cause.
+        """
+        if not hotspots:
+            return None
+
+        # Get unique sites with coordinates
+        site_map = {}
+        for r in rows:
+            if r["hc"] and r["site"]:
+                key = r["site"]
+                if key not in site_map:
+                    site_map[key] = {
+                        "site": r["site"],
+                        "prov": r["prov"],
+                        "reg": r["reg"],
+                        "lat": r["lat"],
+                        "lon": r["lon"],
+                        "tickets": [],
+                    }
+                site_map[key]["tickets"].append(r)
+
+        # For each site, find nearest hotspot and count within 5km
+        site_fire = []
+        for site_name, s in site_map.items():
+            distances = []
+            for hs in hotspots:
+                d = haversine(s["lat"], s["lon"], hs["lat"], hs["lon"])
+                distances.append((d, hs))
+            distances.sort(key=lambda x: x[0])
+
+            if not distances:
+                continue
+
+            nearest_km = distances[0][0]
+            nearest_hs = distances[0][1]
+            count_1km = sum(1 for d, _ in distances if d <= 1)
+            count_5km = sum(1 for d, _ in distances if d <= 5)
+            count_10km = sum(1 for d, _ in distances if d <= 10)
+
+            # Only include sites with fire within 10km
+            if nearest_km > 10:
+                continue
+
+            open_tickets = len(s["tickets"])
+            over_sla = sum(1 for t in s["tickets"] if t["af"] != "6) Within SLA")
+            avg_aging = round(sum(t["aging"] for t in s["tickets"]) / len(s["tickets"]), 1) if s["tickets"] else 0
+            has_power_fail = any("POWER" in t["root"] for t in s["tickets"])
+            has_hardware = any("HARDWARE" in t["root"].upper() or "EQUIPMENT" in t["root"].upper() for t in s["tickets"])
+
+            # Risk scoring: distance + count + ticket correlation
+            risk_score = 0
+            if nearest_km < 1:
+                risk_score += 50
+            elif nearest_km < 3:
+                risk_score += 30
+            elif nearest_km < 5:
+                risk_score += 15
+            elif nearest_km < 10:
+                risk_score += 5
+            risk_score += min(count_5km * 3, 30)  # cap at 30
+            if has_power_fail:
+                risk_score += 10
+            if has_hardware:
+                risk_score += 5
+            if avg_aging > 10:
+                risk_score += 5
+
+            site_fire.append({
+                "site": site_name,
+                "prov": s["prov"],
+                "reg": s["reg"],
+                "lat": s["lat"],
+                "lon": s["lon"],
+                "nearest_km": round(nearest_km, 2),
+                "nearest_frp": nearest_hs["frp"],
+                "nearest_brightness": nearest_hs["brightness"],
+                "count_1km": count_1km,
+                "count_5km": count_5km,
+                "count_10km": count_10km,
+                "open_tickets": open_tickets,
+                "over_sla": over_sla,
+                "avg_aging": avg_aging,
+                "has_power_fail": has_power_fail,
+                "has_hardware": has_hardware,
+                "risk_score": risk_score,
+            })
+
+        # Sort by risk score descending
+        site_fire.sort(key=lambda x: -x["risk_score"])
+
+        # Province-level aggregation
+        prov_risk = {}
+        for s in site_fire:
+            p = s["prov"]
+            if p not in prov_risk:
+                prov_risk[p] = {"sites": 0, "hotspots_5km": 0, "tickets": 0, "critical": 0}
+            prov_risk[p]["sites"] += 1
+            prov_risk[p]["hotspots_5km"] += s["count_5km"]
+            prov_risk[p]["tickets"] += s["open_tickets"]
+            if s["nearest_km"] < 1:
+                prov_risk[p]["critical"] += 1
+
+        top_prov = max(prov_risk.items(), key=lambda x: x[1]["hotspots_5km"])[0] if prov_risk else "-"
+
+        # Correlation analysis: compare ticket metrics near vs far from fire
+        near_tickets = [r for r in rows if r["hc"] and any(
+            haversine(r["lat"], r["lon"], hs["lat"], hs["lon"]) <= 5
+            for hs in hotspots
+        )]
+        far_tickets = [r for r in rows if r["hc"] and r not in near_tickets]
+
+        near_avg_aging = round(sum(t["aging"] for t in near_tickets) / len(near_tickets), 1) if near_tickets else 0
+        far_avg_aging = round(sum(t["aging"] for t in far_tickets) / len(far_tickets), 1) if far_tickets else 0
+        near_power_pct = round(sum(1 for t in near_tickets if "POWER" in t["root"]) / max(len(near_tickets), 1) * 100, 1)
+        far_power_pct = round(sum(1 for t in far_tickets if "POWER" in t["root"]) / max(len(far_tickets), 1) * 100, 1)
+        near_over_pct = round(sum(1 for t in near_tickets if t["af"] != "6) Within SLA") / max(len(near_tickets), 1) * 100, 1)
+        far_over_pct = round(sum(1 for t in far_tickets if t["af"] != "6) Within SLA") / max(len(far_tickets), 1) * 100, 1)
+
+        # Top root causes near fire
+        near_roots = Counter(t["root"] for t in near_tickets)
+        top_near_roots = [{"name": k, "count": v} for k, v in near_roots.most_common(5)]
+
+        # Hotspot density by province (for map overlay)
+        hs_by_prov = Counter()
+        for hs in hotspots:
+            # Simple province lookup by coordinate bounding box
+            for pname, (lat_min, lat_max, lon_min, lon_max) in {
+                "เชียงราย": (19.0, 20.5, 99.3, 100.9),
+                "เชียงใหม่": (17.9, 20.1, 97.7, 99.5),
+                "แม่ฮ่องสอน": (17.5, 20.0, 97.3, 98.2),
+                "ลำปาง": (17.8, 19.6, 99.0, 100.3),
+                "พะเยา": (18.8, 19.7, 99.9, 100.9),
+                "น่าน": (18.3, 20.0, 100.4, 101.5),
+                "แพร่": (17.8, 18.9, 99.7, 100.8),
+                "ลำพูน": (17.8, 18.7, 98.6, 99.4),
+                "ตาก": (15.5, 18.2, 97.4, 99.5),
+                "สุโขทัย": (16.7, 17.5, 99.1, 100.0),
+                "อุตรดิตถ์": (17.2, 18.8, 99.8, 101.5),
+                "พิษณุโลก": (16.3, 17.8, 99.8, 101.2),
+                "กำแพงเพชร": (15.6, 16.9, 98.9, 100.2),
+                "เพชรบูรณ์": (15.7, 17.8, 100.4, 101.8),
+            }.items():
+                if lat_min <= hs["lat"] <= lat_max and lon_min <= hs["lon"] <= lon_max:
+                    hs_by_prov[pname] += 1
+                    break
+
+        return {
+            "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "total_hotspots": len(hotspots),
+            "sites_at_risk": len(site_fire),
+            "critical_sites": sum(1 for s in site_fire if s["nearest_km"] < 1),
+            "tickets_near_fire": len(near_tickets),
+            "summary": {
+                "total_hotspots": len(hotspots),
+                "sites_at_risk": len(site_fire),
+                "tickets_near_fire": len(near_tickets),
+                "top_province": top_prov,
+                "critical_sites": sum(1 for s in site_fire if s["nearest_km"] < 1),
+                "high_risk_sites": sum(1 for s in site_fire if s["nearest_km"] < 3),
+            },
+            "sites": site_fire[:30],
+            "hotspot_coords": [
+                {"lat": hs["lat"], "lon": hs["lon"], "frp": hs["frp"],
+                 "brightness": hs["brightness"], "confidence": hs["confidence"]}
+                for hs in hotspots[:500]
+            ],
+            "by_province": [
+                {"prov": k, "hotspots": v}
+                for k, v in sorted(hs_by_prov.items(), key=lambda x: -x[1])
+            ],
+            "correlation": {
+                "near_count": len(near_tickets),
+                "far_count": len(far_tickets),
+                "near_avg_aging": near_avg_aging,
+                "far_avg_aging": far_avg_aging,
+                "near_power_pct": near_power_pct,
+                "far_power_pct": far_power_pct,
+                "near_over_sla_pct": near_over_pct,
+                "far_over_sla_pct": far_over_pct,
+                "aging_ratio": round(near_avg_aging / far_avg_aging, 2) if far_avg_aging > 0 else 1,
+                "power_ratio": round(near_power_pct / far_power_pct, 2) if far_power_pct > 0 else 1,
+                "top_roots_near_fire": top_near_roots,
+            },
+            "prov_risk": [
+                {"prov": k, **v}
+                for k, v in sorted(prov_risk.items(), key=lambda x: -x[1]["hotspots_5km"])
+            ],
+        }
+
     def build_tab(rows):
         if not rows:
             return None
@@ -521,6 +782,8 @@ def process_excel(fp):
         n2 = rs.get("NOR2", {})
         td2 = next((d2 for d2 in districts if d2["name"] != "ไม่ระบุ"), None)
         weather = build_weather(rows)
+        hotspots = fetch_firms_hotspots()
+        fire = build_fire(rows, hotspots)
         tickets = [r["ticket"] for r in rows]
         geo_clusters = cluster_5km(rows)
         pri_c = Counter(r["pri"] for r in rows)
@@ -544,6 +807,7 @@ def process_excel(fp):
             "coords": coords[:500],
             "need_team": need_team[:5],
             "weather": weather,
+            "fire": fire,
             "tickets": tickets,
             "clusters": geo_clusters,
             "priority": {"p0": pri_c.get(0, 0), "p1": pri_c.get(1, 0), "p2": pri_c.get(2, 0)},
