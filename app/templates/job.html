@@ -1,0 +1,194 @@
+{% extends 'base.html' %}
+{% block title %}{{ job.link_name }} – PAT DocGen{% endblock %}
+{% block main %}
+{% include '_jobhead.html' %}
+{% set can = current_user.can_edit(job) and not job.locked %}{% set can_wf = current_user.can_edit(job) %}
+<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+<div style="flex:999 1 560px;min-width:0">
+
+  {% if job.locked %}<div class="flash ok">งานนี้{{ 'ส่งตรวจ' if job.status=='submitted' else 'อนุมัติ' }}แล้ว — ล็อกการแก้ไข (กด “เปิดแก้ไขใหม่” ด้านขวาหากต้องแก้)</div>{% endif %}
+  <section class="card" id="import">
+    <div class="row between"><h2 style="margin:0">Import รูป (ZIP หรือทั้งโฟลเดอร์)</h2><a href="{{ url_for('main.job_photos', job_id=job.id) }}">ไปหน้าจัดรูป →</a></div>
+    {% if can %}
+    <form method="post" action="{{ url_for('main.job_import', job_id=job.id) }}" enctype="multipart/form-data" data-busy style="margin-top:10px">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div class="drop" id="drop">
+        <div style="font-weight:700">ลากไฟล์ ZIP มาวาง หรือเลือกไฟล์ / โฟลเดอร์</div>
+        <div class="sub" style="margin:4px 0 10px">Import ซ้ำได้ — รูปใหม่จะเติมเฉพาะช่องที่ยังว่าง ไม่ทับช่องที่จัดไว้แล้ว</div>
+        <div class="row" style="justify-content:center">
+          <label class="btn" for="zipf" style="margin:0">เลือกไฟล์ ZIP</label><input class="vh" id="zipf" name="zip" type="file" accept=".zip" onchange="this.form.requestSubmit()">
+          <label class="btn" for="dirf" style="margin:0">เลือกทั้งโฟลเดอร์</label><input class="vh" id="dirf" name="zip" type="file" webkitdirectory multiple onchange="this.form.requestSubmit()">
+        </div>
+      </div>
+    </form>
+    {% endif %}
+    {% if kmz %}<div class="sub" style="margin-top:8px">KMZ: {{ kmz|length }} จุด — {{ kmz|map(attribute=0)|join(', ') }}</div>{% endif %}
+    {% if job.closures %}<div class="sub">หัวต่อที่ใช้ทำหน้า: {{ (f.closures or job.closures|join(', ')) }}</div>{% endif %}
+  </section>
+
+  <section class="card" id="data">
+    <h2>ข้อมูลเอกสาร</h2>
+    <form method="post" action="{{ url_for('main.job_fields', job_id=job.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div style="margin-bottom:10px"><label for="link_name">Link Name</label><input id="link_name" name="link_name" type="text" value="{{ job.link_name }}" {{ 'disabled' if not can }}>
+        <div class="sub" style="margin-top:3px">Site 1 = {{ s1 }} · Site 2 = {{ s2 }}</div></div>
+      {% for title, items in FIELD_FORM %}
+        <div style="font-weight:700;margin:14px 0 8px">{{ title }}</div>
+        <div class="grid g3">
+        {% for k, lbl in items %}<div><label for="f_{{ k }}">{{ lbl }}</label><input id="f_{{ k }}" name="{{ k }}" type="text" value="{{ f.get(k,'') }}" {{ 'disabled' if not can }}></div>{% endfor %}
+        </div>
+      {% endfor %}
+      <div class="card" style="background:#F9FAFB;margin:14px 0 0">
+        <div class="row" style="gap:22px;font-size:14px">
+          <span>Cable <b>{{ '%.2f'|format(lb.cable) if lb.cable is not none else '-' }}</b> dB</span>
+          <span>Splice <b>{{ '%.2f'|format(lb.splice) if lb.splice is not none else '-' }}</b> dB</span>
+          <span>Connector <b>{{ '%.2f'|format(lb.conn) if lb.conn is not none else '-' }}</b> dB</span>
+          <span style="background:#FFFF66;padding:2px 8px;border-radius:6px">รวมจากการคำนวณ <b>{{ '%.2f'|format(lb.total) if lb.total is not none else '-' }}</b> dB</span>
+          <span>OTDR Max/Min <b>{{ '%.2f'|format(lb.otdr_max) }} / {{ '%.2f'|format(lb.otdr_min) }}</b></span>
+        </div>
+      </div>
+      {% if can %}<div style="margin-top:14px"><button class="btn pri" type="submit">บันทึกข้อมูล</button></div>{% endif %}
+    </form>
+  </section>
+
+  <section class="card" id="files">
+    <h2>ไฟล์ประกอบ</h2>
+    <div class="sub" style="margin-bottom:10px">หน้า Loss OTDR / ใบสรุปเคเบิลรื้อถอน / Balance Cable &amp; Material ยังใช้จาก Google Sheet — export เป็น PDF (ทั้งไฟล์ก็ได้) ระบบเลือกหน้าเอง · ไฟล์ .sor ใส่ใน ZIP (โฟลเดอร์ OTDR) หรืออัปโหลดตรงนี้ก็ได้</div>
+    <table class="t">
+      <thead><tr><th>ประเภท</th><th>ไฟล์</th><th>รายละเอียด</th><th>โดย</th><th></th></tr></thead>
+      <tbody>
+      {% for a in atts %}<tr><td>{{ {'sheet':'PDF จาก Google Sheet','asbuilt':'แบบ As-Built','otdr':'Report OTDR (PDF)','sor':'OTDR .sor'}.get(a.kind, a.kind) }}</td><td>{{ a.filename }}</td>
+        <td class="sub">{% if a.kind=='sor' %}{% set m = a.meta %}{{ m.fiber }} · {{ m.length_km }} km · Total loss {{ m.total_loss }} dB · {{ m.date }}{% else %}{{ a.pages }} หน้า{% endif %}</td>
+        <td class="sub">{{ a.uploader.name if a.uploader }} · {{ a.created_at|th }}</td>
+        <td>{% if can %}<form method="post" action="{{ url_for('main.att_delete', att_id=a.id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sm" type="submit">ลบ</button></form>{% endif %}</td></tr>
+      {% else %}<tr><td colspan="5" class="sub">ยังไม่มีไฟล์แนบ</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    {% if can %}
+    <div class="grid g3" style="margin-top:12px">
+      {% for kind, lbl, hint, acc in [('sheet','PDF จาก Google Sheet','Loss / เคเบิลรื้อถอน / Balance Cable','.pdf'),('sor','ไฟล์ OTDR .sor','→ หน้า Report OTDR + ค่า L','.sor'),('asbuilt','แบบ As-Built','ปก / Symbol / Core Assignment','.pdf')] %}
+      <form method="post" action="{{ url_for('main.job_attach', job_id=job.id) }}" enctype="multipart/form-data" class="drop" style="padding:14px">
+        <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ kind }}">
+        <div style="font-weight:700">{{ lbl }}</div><div class="sub" style="margin-bottom:8px">{{ hint }}</div>
+        <label class="btn sm" for="att_{{ kind }}" style="margin:0">เลือกไฟล์</label>
+        <input class="vh" id="att_{{ kind }}" type="file" name="file" accept="{{ acc }}" {{ 'multiple' if kind!='sheet' }} onchange="this.form.requestSubmit()">
+      </form>
+      {% endfor %}
+    </div>
+    {% if sheet_cfg %}
+    <form method="post" action="{{ url_for('main.job_sheet_cfg', job_id=job.id) }}" class="row" style="margin-top:12px;align-items:flex-end">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div><label for="sc1">หน้าที่ใช้จากไฟล์ Sheet</label><input id="sc1" type="text" name="forms" value="{{ sheet_cfg.forms }}" style="width:160px"></div>
+      <button class="btn" type="submit">บันทึก</button>
+      <span class="sub">ไฟล์มี {{ sheet_cfg.count }} หน้า · เช่น 4,5,6 หรือ 4-6</span>
+    </form>
+    {% endif %}
+    {% endif %}
+  </section>
+
+  <section class="card" id="sign">
+    <h2>ผู้ลงนาม (ใส่ในหน้ารายการเอกสาร / สรุปผลตรวจรับ / Deficiency)</h2>
+    <div class="sub" style="margin-bottom:10px">อัปโหลดรูปลายเซ็น (PNG/JPG ถ่ายบนกระดาษขาวได้ ระบบลบพื้นขาวให้) หรือกด “ใช้ลายเซ็นของฉัน” (ตั้งได้ที่เมนู โปรไฟล์ของฉัน)</div>
+    <form method="post" action="{{ url_for('main.job_signatures', job_id=job.id) }}" enctype="multipart/form-data">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div class="grid g2">
+      {% for role, label in SIG_ROLES %}
+        <div style="border:1px solid #E5E7EB;border-radius:10px;padding:10px 12px">
+          <div style="font-weight:700;margin-bottom:6px">{{ label }}</div>
+          <div class="grid g2">
+            <div><label for="sn_{{ role }}">ชื่อ</label><input id="sn_{{ role }}" type="text" name="sig_{{ role }}_name" value="{{ f.get('sig_'~role~'_name','') }}" {{ 'disabled' if not can }}></div>
+            <div><label for="sd_{{ role }}">วันที่</label><input id="sd_{{ role }}" type="text" name="sig_{{ role }}_date" value="{{ f.get('sig_'~role~'_date','') }}" placeholder="13-10-2569" {{ 'disabled' if not can }}></div>
+            {% if role == 'sender' %}<div><label for="sp_{{ role }}">ตำแหน่ง</label><input id="sp_{{ role }}" type="text" name="sig_sender_pos" value="{{ f.get('sig_sender_pos','') }}" {{ 'disabled' if not can }}></div>{% endif %}
+          </div>
+          <div class="row" style="margin-top:8px">
+            {% if f.get('sig_'~role~'_img') %}<img src="{{ url_for('main.job_sig_img', job_id=job.id, role=role) }}" alt="ลายเซ็น {{ label }}" style="height:38px;border:1px dashed #D1D5DB;border-radius:6px;padding:2px;background:#fff">{% else %}<span class="sub">ยังไม่มีลายเซ็น</span>{% endif %}
+            {% if can %}
+            <label class="btn sm" for="sf_{{ role }}" style="margin:0">อัปโหลดลายเซ็น</label><input class="vh" id="sf_{{ role }}" type="file" name="sig_{{ role }}_file" accept=".png,.jpg,.jpeg">
+            {% if current_user.signature_path %}<label class="sub" style="font-weight:400;margin:0"><input type="checkbox" name="sig_{{ role }}_mine" value="1"> ใช้ลายเซ็นของฉัน</label>{% endif %}
+            {% if f.get('sig_'~role~'_img') %}<label class="sub" style="font-weight:400;margin:0"><input type="checkbox" name="sig_{{ role }}_clear" value="1"> ลบลายเซ็น</label>{% endif %}
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+      </div>
+      {% if can %}<div style="margin-top:12px"><button class="btn pri" type="submit">บันทึกผู้ลงนาม</button></div>{% endif %}
+    </form>
+  </section>
+
+  <section class="card" id="kmz">
+    <div class="row between"><h2 style="margin:0">พิกัดจุดติดตั้ง closure (จากรูปที่ 3 ของแต่ละหัว)</h2>
+      <a class="btn pri" href="{{ url_for('main.job_kmz', job_id=job.id) }}">ดาวน์โหลด KMZ</a></div>
+    <form method="post" action="{{ url_for('main.job_coords', job_id=job.id) }}" style="margin-top:10px">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <div class="scroll"><table class="t" style="min-width:700px">
+        <thead><tr><th>หัวต่อ</th><th>รูป</th><th>พิกัด (lat, lon)</th><th>ที่มา</th><th>ห่างจากจุดใน KMZ แบบ</th><th>แก้พิกัด</th></tr></thead>
+        <tbody>
+        {% for c in coords %}
+          <tr><td><b>{{ c.closure }}</b></td>
+            <td>{% if c.photo %}<img src="{{ url_for('main.photo_file', pid=c.photo.id, size='t') }}" alt="" style="height:44px;border-radius:6px">{% else %}<span class="sub">-</span>{% endif %}</td>
+            <td>{% if c.lat is not none %}{{ '%.6f'|format(c.lat) }}, {{ '%.6f'|format(c.lon) }}{% else %}<span style="color:#92400E">อ่านจากรูปไม่ได้</span>{% endif %}</td>
+            <td class="sub">{{ c.src }}</td>
+            <td>{% if c.dist is not none %}<span style="{{ 'color:#B91C1C;font-weight:700' if c.dist > 50 }}">{{ c.dist }} ม.</span>{% else %}<span class="sub">-</span>{% endif %}</td>
+            <td><label class="vh" for="ll_{{ loop.index }}">พิกัด {{ c.closure }}</label><input id="ll_{{ loop.index }}" type="text" name="ll_{{ c.closure }}" placeholder="17.979082, 100.054479" style="width:190px;height:34px" {{ 'disabled' if not can }}>
+              {% if c.src == 'กรอกเอง' and can %}<label class="sub" style="font-weight:400"><input type="checkbox" name="clr_{{ c.closure }}" value="1"> ใช้จากรูปแทน</label>{% endif %}</td></tr>
+        {% else %}<tr><td colspan="6" class="sub">ยังไม่มีหัวต่อ</td></tr>{% endfor %}
+        </tbody></table></div>
+      {% if can %}<div class="row" style="margin-top:10px"><button class="btn" type="submit">บันทึกพิกัด</button><button class="btn" type="submit" name="reocr" value="1">อ่านพิกัดจากรูปใหม่</button></div>{% endif %}
+    </form>
+  </section>
+</div>
+
+<aside style="flex:1 1 320px;min-width:0">
+  <section class="card" id="docs">
+    <h2>ตรวจก่อนสร้าง</h2>
+    {% for lvl, msg in checks %}<div class="chk {{ lvl }}">{{ '✓' if lvl=='ok' else ('!' if lvl=='warn' else 'i') }} {{ msg }}</div>{% endfor %}
+    {% if can %}
+    <form method="post" action="{{ url_for('main.job_generate', job_id=job.id) }}" data-busy style="margin-top:12px">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <button class="btn pri big" type="submit" style="width:100%">สร้าง PAT + AS-BUILT</button>
+    </form>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>เอกสารที่สร้างแล้ว</h2>
+    {% for d in docs %}
+      <div style="border-top:1px solid #F1F5F9;padding:8px 0;font-size:14px">
+        <b>{{ 'PAT' if d.kind=='PAT' else 'AS-BUILT' }} v{{ d.version }}</b> · {{ d.pages }} หน้า · {{ (d.size/1048576)|round(1) }} MB
+        <div class="sub">{{ d.creator.name if d.creator }} · {{ d.created_at|th }}</div>
+        <a class="btn sm" href="{{ url_for('main.doc_download', doc_id=d.id) }}?inline=1" target="_blank" rel="noopener">เปิดดู</a>
+        <a class="btn sm" href="{{ url_for('main.doc_download', doc_id=d.id) }}">ดาวน์โหลด</a>
+      </div>
+    {% else %}<div class="sub">ยังไม่ได้สร้าง</div>{% endfor %}
+  </section>
+
+  <section class="card">
+    <h2>สถานะ / อนุมัติ</h2>
+    <form method="post" action="{{ url_for('main.job_status', job_id=job.id) }}">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <label for="cm">หมายเหตุ / เหตุผลตีกลับ</label><textarea id="cm" name="comment"></textarea>
+      <div class="row" style="margin-top:8px">
+        {% if can_wf and job.status in ('draft','ready','rejected') %}<button class="btn pri" name="action" value="submit">ส่งตรวจ</button>{% endif %}
+        {% if current_user.can_approve(job) and job.status=='submitted' %}<button class="btn ok" name="action" value="approve">อนุมัติ</button><button class="btn bad" name="action" value="reject">ตีกลับ</button>{% endif %}
+        {% if can_wf and job.status in ('submitted','approved') %}<button class="btn" name="action" value="reopen">เปิดแก้ไขใหม่</button>{% endif %}
+        {% if current_user.can_approve(job) %}<button class="btn sm" name="action" value="delete" onclick="return confirm('ลบงานนี้และไฟล์ทั้งหมด?')">ลบงาน</button>{% endif %}
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>ประวัติ (Audit log)</h2>
+    {% for h in hist %}<div style="font-size:13px;border-top:1px solid #F1F5F9;padding:5px 0"><span class="sub">{{ h.created_at|th }}</span> · <b>{{ h.user.name if h.user }}</b> {{ h.detail }}</div>{% endfor %}
+  </section>
+</aside>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const d=document.getElementById('drop');
+if(d){const f=d.closest('form'),inp=document.getElementById('zipf');
+['dragover','dragenter'].forEach(e=>d.addEventListener(e,ev=>{ev.preventDefault();d.classList.add('over')}));
+['dragleave','drop'].forEach(e=>d.addEventListener(e,ev=>{ev.preventDefault();d.classList.remove('over')}));
+d.addEventListener('drop',ev=>{inp.files=ev.dataTransfer.files;document.getElementById('dirf').disabled=true;f.requestSubmit()});}
+</script>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}งานทั้งหมด – PAT DocGen{% endblock %}
+{% block main %}
+<div class="row between" style="margin-bottom:14px">
+  <div><div class="sub">{{ current_user.company.name if current_user.company else 'ทุกบริษัท' }}</div><h1>งานส่งเอกสาร OFC</h1></div>
+  <form class="row" method="get">
+    {% if companies %}<label class="vh" for="co">บริษัท</label><select id="co" name="company" style="width:200px" onchange="this.form.submit()"><option value="">ทุกบริษัท</option>{% for c in companies %}<option value="{{ c.id }}" {{ 'selected' if cid==c.id }}>{{ c.name }}</option>{% endfor %}</select>{% endif %}
+    <input type="hidden" name="status" value="{{ st }}">
+    <label class="vh" for="q">ค้นหา</label><input id="q" type="search" name="q" value="{{ term }}" placeholder="ค้นหา Link / Site / SAP No." style="width:250px">
+    {% if current_user.can_edit() %}<a class="btn pri" href="{{ url_for('main.job_new') }}">+ สร้างงานใหม่</a>{% endif %}
+  </form>
+</div>
+<div class="grid g6" style="margin-bottom:16px">
+  <a class="kpi {{ 'on' if not st }}" href="?status=&q={{ term }}&company={{ cid or '' }}"><span class="sub">งานทั้งหมด</span><b>{{ total }}</b></a>
+  {% for k in ['draft','ready','submitted','rejected','approved'] %}
+  <a class="kpi {{ 'on' if st==k }}" href="?status={{ k }}&q={{ term }}&company={{ cid or '' }}"><span class="sub">{{ STATUS[k][0] }}</span><b>{{ counts.get(k,0) }}</b></a>
+  {% endfor %}
+</div>
+<div class="card" style="padding:0;overflow:hidden">
+  <div class="scroll"><table class="t" style="min-width:960px">
+    <thead><tr><th>Link / Site</th>{% if current_user.is_super %}<th>บริษัท</th>{% endif %}<th>ผู้สร้าง</th><th>แก้ล่าสุดโดย</th><th>รูป</th><th>สถานะ</th><th>อัปเดต</th></tr></thead>
+    <tbody>
+    {% for j, p in rows %}
+      <tr>
+        <td><a href="{{ url_for('main.job_view', job_id=j.id) }}" style="font-weight:700;text-decoration:none">{{ j.link_name }}</a><div class="sub">{{ j.fields.get('activity','') }} {{ ('· SAP ' ~ j.fields.get('sap_no')) if j.fields.get('sap_no') }}</div></td>
+        {% if current_user.is_super %}<td>{{ j.company.name }}</td>{% endif %}
+        <td>{{ j.creator.name if j.creator }}</td>
+        <td>{{ j.updater.name if j.updater }}</td>
+        <td style="min-width:130px"><span class="sub">{{ p.filled }}/{{ p.total }} ช่อง{% if p.review %} · ตรวจ {{ p.review }}{% endif %}</span><div class="bar"><i style="width:{{ (100*p.filled/p.total)|round|int if p.total else 0 }}%;{{ 'background:#15803D' if p.filled==p.total }}"></i></div></td>
+        <td><span class="pill {{ STATUS[j.status][1] }}">{{ STATUS[j.status][0] }}</span></td>
+        <td class="sub">{{ j.updated_at|th }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="sub" style="padding:30px;text-align:center">ยังไม่มีงาน — กด “สร้างงานใหม่” แล้ววางไฟล์ ZIP รูปได้เลย</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+<div class="grid g2">
+  <div class="card"><h2>จำนวนงานต่อคน</h2>
+    {% set mx = by_user[0][1] if by_user else 1 %}
+    {% for n, c in by_user %}<div class="row" style="gap:10px;margin:6px 0"><span style="width:140px">{{ n }}</span><div class="bar" style="flex:1;height:10px"><i style="height:10px;width:{{ (100*c/mx)|int }}%"></i></div><span class="sub" style="width:60px;text-align:right">{{ c }} งาน</span></div>{% else %}<div class="sub">ยังไม่มีข้อมูล</div>{% endfor %}
+  </div>
+  <div class="card"><h2>กิจกรรมล่าสุด</h2>
+    {% for a in recent %}<div style="font-size:14px;margin:5px 0"><b>{{ a.user.name if a.user else '-' }}</b> {{ a.detail }} <span class="sub">· {{ a.created_at|th }}</span></div>{% else %}<div class="sub">-</div>{% endfor %}
+    <a href="{{ url_for('main.audit') }}" class="sub">ดู Audit log ทั้งหมด →</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Audit log – PAT DocGen{% endblock %}
+{% block main %}
+<h1>Audit log</h1>
+<div class="sub" style="margin-bottom:14px">ทุกการกระทำในระบบ: ใคร ทำอะไร กับงานไหน เมื่อไร (500 รายการล่าสุด)</div>
+<div class="card" style="padding:0;overflow:hidden"><div class="scroll">
+<table class="t" style="min-width:860px">
+  <thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>งาน</th><th>การกระทำ</th><th>รายละเอียด</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr><td class="sub" style="white-space:nowrap">{{ r.created_at|th }}</td>
+      <td><a href="?user={{ r.user_id }}">{{ r.user.name if r.user else '-' }}</a></td>
+      <td>{% if r.job_id and jobs.get(r.job_id) %}<a href="{{ url_for('main.job_view', job_id=r.job_id) }}">{{ jobs[r.job_id].link_name }}</a>{% elif r.job_id %}<span class="sub">(ลบแล้ว)</span>{% endif %}</td>
+      <td>{{ r.action }}</td><td>{{ r.detail }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div></div>
+{% endblock %}

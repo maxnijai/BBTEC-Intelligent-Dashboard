@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}สร้างงานใหม่ – PAT DocGen{% endblock %}
+{% block main %}
+<h1>สร้างงานใหม่</h1>
+<div class="sub" style="margin-bottom:14px">กรอกแค่ Link Name แล้ววาง ZIP รูป — ระบบจะแยก Site, หัวต่อ และวางรูปเข้าช่องให้</div>
+{% if current_user.is_super and not companies %}
+<div class="card" style="max-width:820px;border-color:#FCD34D;background:#FFFBEB">
+  <h2>ต้องสร้างบริษัทก่อน</h2>
+  <p style="margin:0 0 12px">ทุกงานต้องอยู่ภายใต้บริษัทผู้รับเหมา — ใช้แยกว่าใครเห็นงานไหน และใช้ชื่อ / ที่อยู่ / โลโก้บนหน้าปก</p>
+  <a class="btn pri" href="{{ url_for('main.companies') }}">ไปสร้างบริษัท →</a>
+</div>
+{% else %}
+<form method="post" enctype="multipart/form-data" class="card" data-busy style="max-width:820px">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  {% if companies %}
+  <div style="margin-bottom:12px"><label for="cid">งานนี้ของบริษัท</label><select id="cid" name="company_id" required>{% if companies|length > 1 %}<option value="">— เลือกบริษัทผู้รับเหมา —</option>{% endif %}{% for c in companies %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select>
+    <div class="sub" style="margin-top:3px">คุณเป็น Super Admin จึงต้องเลือกว่าสร้างให้บริษัทไหน (ผู้ใช้ของบริษัทจะไม่เห็นช่องนี้)</div></div>
+  {% endif %}
+  <div style="margin-bottom:6px"><label for="ln">Link Name</label><input id="ln" name="link_name" type="text" required placeholder="Rehome Site Dtac DN_PHE1149-D_PHE0020"></div>
+  <div class="sub" id="sites" style="margin-bottom:14px">&nbsp;</div>
+  <label for="zip">ไฟล์ ZIP รูปถ่าย (ไม่บังคับ — Import ทีหลังได้)</label>
+  <div class="drop" id="drop">
+    <div style="font-weight:700;font-size:17px">ลากไฟล์ ZIP มาวาง หรือกดเลือก</div>
+    <div class="sub" style="margin:6px 0 12px">โครงโฟลเดอร์แนะนำ: PHE1149/ · PHE0020/ · Closure/SJ#01/ · PlugPort/PHE1149/ · Power/ · PlanWork/ · Design.jpg · *.kmz</div>
+    <input id="zip" name="zip" type="file" accept=".zip">
+  </div>
+  <div class="row" style="margin-top:16px"><button class="btn pri big" type="submit">สร้างงาน</button><span class="sub">ส่วนใหญ่เป็นเวลาอัปโหลด (ZIP 33 MB ≈ 30–60 วินาทีบนเน็ตทั่วไป) จัดรูปเองอีกประมาณ 5–15 วินาที</span></div>
+</form>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+const ln=document.getElementById('ln'),out=document.getElementById('sites');
+if(ln)ln.addEventListener('input',()=>{const m=ln.value.match(/\bD[A-Z]?_[A-Z]{2,4}\d{3,5}\b/g)||[];out.textContent=m.length?('Site 1: '+(m[0]||'-')+'   ·   Site 2: '+(m[1]||'-')):' '});
+const d=document.getElementById('drop'),inp=document.getElementById('zip');
+if(d){
+['dragover','dragenter'].forEach(e=>d.addEventListener(e,ev=>{ev.preventDefault();d.classList.add('over')}));
+['dragleave','drop'].forEach(e=>d.addEventListener(e,ev=>{ev.preventDefault();d.classList.remove('over')}));
+d.addEventListener('drop',ev=>{inp.files=ev.dataTransfer.files});}
+</script>
+{% endblock %}

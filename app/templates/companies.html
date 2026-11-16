@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}บริษัท – PAT DocGen{% endblock %}
+{% block main %}
+<h1>{{ 'บริษัท (Workspace)' if current_user.is_super else 'ข้อมูลบริษัท' }}</h1>
+<div class="sub" style="margin-bottom:14px">ข้อมูลนี้ใช้ในหน้าปก และโลโก้มุมซ้าย/ขวาของทุกหน้ารูป</div>
+{% for c in companies %}
+<form method="post" enctype="multipart/form-data" class="card">
+  <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="cid" value="{{ c.id }}">
+  <div class="grid g3">
+    <div><label for="n{{ c.id }}">ชื่อ (อังกฤษ)</label><input id="n{{ c.id }}" type="text" name="name" value="{{ c.name }}"></div>
+    <div><label for="t{{ c.id }}">ชื่อบนปก (ไทย)</label><input id="t{{ c.id }}" type="text" name="name_th" value="{{ c.name_th }}"></div>
+    <div><label for="a{{ c.id }}">ที่อยู่บนปก</label><textarea id="a{{ c.id }}" name="address">{{ c.address }}</textarea></div>
+    {% for k, lbl in [('project','Project ค่าเริ่มต้น'),('region','Region'),('activity','Activity'),('equip1','อุปกรณ์ Site 1'),('equip2','อุปกรณ์ Site 2')] %}
+    <div><label for="d{{ k }}{{ c.id }}">{{ lbl }}</label><input id="d{{ k }}{{ c.id }}" type="text" name="d_{{ k }}" value="{{ c.defaults.get(k,'') }}"></div>
+    {% endfor %}
+    <div><label for="tl{{ c.id }}">โลโก้มุมซ้าย (ลูกค้า/Template)</label>{% if c.template_logo_path %}<img src="{{ url_for('main.logo', cid=c.id, which='template') }}" alt="" style="height:34px;display:block;margin-bottom:4px">{% endif %}<input id="tl{{ c.id }}" type="file" name="template_logo" accept=".png,.jpg,.jpeg"></div>
+    <div><label for="cl{{ c.id }}">โลโก้มุมขวา (บริษัท)</label>{% if c.logo_path %}<img src="{{ url_for('main.logo', cid=c.id, which='company') }}" alt="" style="height:34px;display:block;margin-bottom:4px">{% endif %}<input id="cl{{ c.id }}" type="file" name="logo" accept=".png,.jpg,.jpeg"></div>
+  </div>
+  <div style="margin-top:12px"><button class="btn pri" type="submit">บันทึก</button></div>
+</form>
+{% endfor %}
+{% if current_user.is_super %}
+<form method="post" class="card" style="max-width:600px">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <h2>เพิ่มบริษัทใหม่</h2>
+  <div class="row"><label class="vh" for="nn">ชื่อบริษัท</label><input id="nn" type="text" name="name" placeholder="ชื่อบริษัท (อังกฤษ)" required style="flex:1"><button class="btn pri" type="submit">เพิ่ม</button></div>
+</form>
+{% endif %}
+{% endblock %}

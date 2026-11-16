@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เข้าสู่ระบบ – PAT DocGen</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="login-wrap">
+  <section class="login-l">
+    <div style="display:flex;gap:10px;align-items:center;color:#fff;font-weight:700;font-size:20px"><i style="width:36px;height:36px;border-radius:9px;background:#2563EB;display:inline-block"></i>PAT DocGen</div>
+    <h1>Import รูปครั้งเดียว<br>ได้ PAT + AS-BUILT ครบ 2 เล่ม</h1>
+    <p style="font-size:16px;line-height:1.7;max-width:480px">ระบบสร้างเอกสารส่งงาน OFC: จับคู่รูปเข้าช่องอัตโนมัติจากโฟลเดอร์ / พิกัดบนรูป / KMZ, คำนวณ Link Budget และบันทึกว่าใครทำ Site ไหน</p>
+  </section>
+  <section class="login-r">
+    <form method="post">
+      <input type="hidden" name="_csrf" value="{{ csrf }}">
+      <h2 style="font-size:22px;margin:0">เข้าสู่ระบบ</h2>
+      {% with msgs = get_flashed_messages(with_categories=true) %}{% for c, m in msgs %}<div class="flash {{ c }}">{{ m }}</div>{% endfor %}{% endwith %}
+      <div><label for="email">อีเมล</label><input id="email" name="email" type="email" required autofocus></div>
+      <div><label for="pw">รหัสผ่าน</label><input id="pw" name="password" type="password" required></div>
+      <button class="btn pri big" type="submit">เข้าสู่ระบบ</button>
+      <div class="sub">บัญชีแยกตามบริษัท — ติดต่อ Admin ของบริษัทเพื่อขอบัญชี</div>
+    </form>
+  </section>
+</div>
+</body>
+</html>
