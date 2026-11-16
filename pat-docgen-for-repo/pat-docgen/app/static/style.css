@@ -89,3 +89,5 @@ table.t td{padding:10px 12px;border-top:1px solid #F1F5F9;vertical-align:top}
 .slot.dropok{outline:3px dashed #1D4ED8;outline-offset:2px}
 .slot[draggable=true]{cursor:grab}
 .m-mem{background:#FEF9C3;color:#854D0E}
+.logo-tile{width:36px;height:36px;border-radius:9px;background:#fff;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.logo-tile img{width:82%;height:82%;object-fit:contain}

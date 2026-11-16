@@ -5,12 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}PAT DocGen{% endblock %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
 <meta name="csrf" content="{{ csrf }}">
 </head>
 <body>
 <div class="shell">
   <nav class="side" aria-label="เมนูหลัก">
-    <div class="brand"><i></i>PAT DocGen</div>
+    <div class="brand"><span class="logo-tile"><img src="{{ url_for('static', filename='logo-icon.png') }}" alt=""></span>PAT DocGen</div>
     {% set ep = request.endpoint %}
     <a href="{{ url_for('main.dashboard') }}" class="{{ 'on' if ep=='main.dashboard' }}">งานทั้งหมด</a>
     {% if current_user.can_edit() %}<a href="{{ url_for('main.job_new') }}" class="{{ 'on' if ep=='main.job_new' }}">+ สร้างงานใหม่</a>{% endif %}
