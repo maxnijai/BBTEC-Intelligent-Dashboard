@@ -246,6 +246,10 @@ def classify_path(rel, s1, s2):
 
 # ---------------------------------------------------------------- main import
 
+KIND_TH = {"site_location": "Location", "odf_rack": "ตู้ ODF", "core_label": "ป้าย Core", "equipment_port": "พอร์ตอุปกรณ์",
+           "power_meter": "Power meter", "otdr_screen": "จอ OTDR", "closure_front": "หน้า closure", "closure_inside": "ใน closure",
+           "closure_install": "จุดติดตั้ง", "sign": "ป้าย (ไม่ใช้)", "sfp": "SFP (ไม่ใช้)", "other": "อื่น ๆ"}
+
 SLOT_KIND = {  # ประเภทรูปที่ควรอยู่ในช่อง (เรียนรู้จาก PAT ตัวอย่าง)
     "location": "site_location", "odf": "odf_rack", "core": "core_label",
     "port1": "equipment_port", "port2": "equipment_port", "odf1": "odf_rack", "odf2": "core_label",

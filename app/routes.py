@@ -12,8 +12,8 @@ from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import func, or_
 
 from . import pdfgen, vision
-from .importer import (REVIEW_BELOW, auto_assign, features, fiber_length_from_images, haversine, norm_closure, ocr_latlon,
-                       run_import, slot_kind)
+from .importer import (KIND_TH, REVIEW_BELOW, auto_assign, features, fiber_length_from_images, haversine, norm_closure,
+                       ocr_latlon, photo_time_key, run_import, slot_kind)
 from .sorfile import parse_sor
 from .layout import DEFAULT_FIELDS, all_slot_keys, build_pages, closure_list, link_budget, sites_from_link
 from .models import ROLES, STATUS, Attachment, Audit, Company, Document, Example, Job, Photo, User, db, now
@@ -137,7 +137,7 @@ FIELD_FORM = [
     ("Link Budget", [("lb_L", "L ความยาว (Km.) — จาก .sor / รูป OTDR"), ("lb_aF", "aF (dB/Km.)"), ("lb_NE", "NE — นับจากโฟลเดอร์หัวต่อ"),
                      ("lb_aE", "aE (dB)"), ("lb_NC", "NC จำนวน Connector"), ("lb_aC", "aC (dB)"),
                      ("lb_otdr_max", "OTDR Max (dB) — ค่า Fix 4.60"), ("lb_otdr_min", "OTDR Min (dB) — ค่า Fix 4.44"), ("lb_note", "หมายเหตุ")]),
-    ("หน้า Deficiency", [("def_region", "Region (เช่น UPC1)"), ("def_subcon", "Sub-Contractor name (ว่าง = ชื่อบริษัท)")]),
+    ("หน้า Deficiency", [("def_region", "Region (เช่น UPC1)"), ("def_date", "Date (ว่าง = วันที่ลงนาม Manager + 5 วัน)"), ("def_subcon", "Sub-Contractor name (ว่าง = ชื่อบริษัท)")]),
 ]
 
 
@@ -409,20 +409,7 @@ def do_import(job, data, filename):
         flash(f"Import ไม่สำเร็จ: {e}", "error")
         return
     photos = res["photos"]
-    ai_note = ""
-    if vision.enabled() and photos:
-        targets = [(p["id"], p["path"]) for p in photos if p["group"] not in ("design", "planwork", "route")]
-        result, usage = vision.classify(targets, _examples(job.company_id))
-        for p in photos:
-            r = result.get(p["id"])
-            if r:
-                p["kind"], p["kconf"] = r.get("kind"), float(r.get("conf") or 0.8)
-                if r.get("lat") and r.get("lon") and not p.get("lat"):
-                    try:
-                        p["lat"], p["lon"] = float(r["lat"]), float(r["lon"])
-                    except (TypeError, ValueError):
-                        pass
-        ai_note = f", AI จัดประเภท {len(result)} รูป ({usage['in'] + usage['out']:,} tokens ≈ ${usage['usd']})"
+    ai_note = run_ai(job, photos)
     # ใช้รูปเดิมที่ import ไว้แล้วร่วมด้วย (Import หลายรอบ)
     prev = [{"id": p.id, "rel": p.rel, "name": p.name, "group": p.group, "sub": (int(p.sub) if p.group in ("site", "plug") and p.sub.isdigit() else p.sub),
              "kind": p.kind, "kconf": p.kconf, "path": p.path, "feat": features(p.path), "exif_time": None, "lat": p.lat, "lon": p.lon}
@@ -480,6 +467,86 @@ def do_import(job, data, filename):
                   + (", มี KMZ" if res["kmz"] else "") + ai_note, job)
     db.session.commit()
     flash(f"Import {len(photos)} รูป — วางเข้าช่องให้ {added} ช่อง (ให้ตรวจ {len([s for s in review if assign.get(s)])} ช่อง){ai_note}", "ok")
+
+
+def run_ai(job, photos):
+    """ให้ AI จัดประเภทรูป (แก้ dict ใน photos) คืนข้อความสรุปสำหรับ log/flash"""
+    if not vision.enabled() or not photos:
+        return ""
+    targets = [(p["id"], p["path"], os.path.dirname(p["rel"])) for p in photos if p["group"] not in ("design", "planwork", "route")]
+    result, usage = vision.classify(targets, _examples(job.company_id))
+    for p in photos:
+        r = result.get(p["id"])
+        if r:
+            p["kind"], p["kconf"] = r.get("kind"), float(r.get("conf") or 0.8)
+            if r.get("lat") and r.get("lon") and not p.get("lat"):
+                try:
+                    p["lat"], p["lon"] = float(r["lat"]), float(r["lon"])
+                except (TypeError, ValueError):
+                    pass
+    f = job.fields
+    f["_ai"] = {"at": now().isoformat(timespec="minutes"), "n": len(result), "total": len(targets), "usd": usage["usd"],
+                "tokens": usage["in"] + usage["out"], "errors": usage.get("errors", []), "examples": len(_examples(job.company_id))}
+    job.setj("fields", f)
+    if usage.get("errors"):
+        flash("AI ทำงานไม่สำเร็จ: " + " / ".join(usage["errors"])[:300] + " — ระบบใช้วิธีสำรอง (โฟลเดอร์/สี) แทน", "error")
+    return f", AI จัดประเภท {len(result)}/{len(targets)} รูป ({usage['in'] + usage['out']:,} tokens ≈ ${usage['usd']})" + \
+        (f", AI error: {usage['errors'][0]}" if usage.get("errors") else "")
+
+
+def _photo_dicts(job):
+    out = []
+    for p in Photo.query.filter_by(job_id=job.id).all():
+        sub = int(p.sub) if p.group in ("site", "plug") and (p.sub or "").isdigit() else (p.sub or None)
+        out.append({"id": p.id, "rel": p.rel, "name": p.name, "group": p.group, "sub": sub, "kind": p.kind, "kconf": p.kconf,
+                    "path": p.path, "feat": features(p.path), "exif_time": None, "lat": p.lat, "lon": p.lon})
+    out.sort(key=photo_time_key)
+    return out
+
+
+@bp.route("/jobs/<int:job_id>/ai-redo", methods=["POST"])
+@login_required
+def job_ai_redo(job_id):
+    """ให้ AI ดูรูปทั้งหมดของงานนี้ใหม่ (ใช้ตัวอย่างที่สอนล่าสุด) แล้วจัดช่องใหม่ — ไม่แตะช่องที่คนเลือกเอง"""
+    job = get_job(job_id, edit=True)
+    if not vision.enabled():
+        flash("ยังไม่ได้เปิด AI — ใส่ ANTHROPIC_API_KEY ใน Railway Variables ก่อน", "error")
+        return redirect(url_for("main.job_photos", job_id=job.id))
+    photos = _photo_dicts(job)
+    method = job.j("method", {})
+    manual_ids = {pid for s_, pid in job.assign.items() if method.get(s_) == "manual"}
+    for p in photos:
+        if p["id"] not in manual_ids:
+            p["kind"] = None
+    note = run_ai(job, [p for p in photos if p["id"] not in manual_ids])
+    for p in photos:
+        ph = db.session.get(Photo, p["id"])
+        if ph and p["id"] not in manual_ids:
+            ph.kind, ph.kconf = p.get("kind"), p.get("kconf")
+    new_a, new_c, new_m = auto_assign(photos, closure_list(job.fields, job.closures))
+    assign, conf = job.assign, job.j("conf", {})
+    review = {k for k in job.j("review", []) if method.get(k) == "manual"}
+    changed = 0
+    for slot in set(assign) | set(new_a):
+        if method.get(slot) == "manual":
+            continue
+        if assign.get(slot) != new_a.get(slot):
+            changed += 1
+        if slot in new_a:
+            assign[slot], conf[slot], method[slot] = new_a[slot], new_c[slot], new_m[slot]
+            if new_c[slot] < REVIEW_BELOW:
+                review.add(slot)
+        else:
+            assign.pop(slot, None)
+    job.setj("assign", assign)
+    job.setj("conf", conf)
+    job.setj("method", method)
+    job.setj("review", sorted(review))
+    job.updated_by = current_user.id
+    log("ai_redo", f"ให้ AI จัดรูปใหม่: เปลี่ยน {changed} ช่อง (ไม่แตะช่องที่เลือกเอง {len(manual_ids)} รูป){note}", job)
+    db.session.commit()
+    flash(f"AI จัดรูปใหม่แล้ว — เปลี่ยน {changed} ช่อง{note}", "ok")
+    return redirect(url_for("main.job_photos", job_id=job.id))
 
 
 @bp.route("/jobs/<int:job_id>/import", methods=["POST"])
@@ -593,7 +660,7 @@ def job_kmz(job_id):
                       f"<Point><coordinates>{r['lon']:.6f},{r['lat']:.6f},0</coordinates></Point></Placemark>")
         kml = (f'<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>'
                f"<name>{html_escape(job.link_name)} - จุดติดตั้ง closure</name>"
-               f'<Style id="cl"><IconStyle><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/paddle/red-circle.png</href></Icon></IconStyle></Style>'
+               f'<Style id="cl"><IconStyle><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/pushpin/ylw-pushpin.png</href></Icon><hotSpot x="20" y="2" xunits="pixels" yunits="pixels"/></IconStyle></Style>'
                f"{''.join(pm)}</Document></kml>")
         zf.writestr("doc.kml", kml)
     log("kmz", f"ดาวน์โหลด KMZ จุดติดตั้ง closure ({len(pm)} จุด)", job)
@@ -646,7 +713,8 @@ def job_photos(job_id):
     prefs = {k: pref(k) for k in all_slot_keys(pages)}
     return render_template("photos.html", job=job, pages=pages, pno=pno, prefs=prefs, photos=photos, used=used, groups=groups,
                            assign=job.assign, conf=job.j("conf", {}), method=job.j("method", {}),
-                           review=set(job.j("review", [])), prog=progress(job, pages), STATUS=STATUS, ai=vision.enabled())
+                           review=set(job.j("review", [])), prog=progress(job, pages), STATUS=STATUS, ai=vision.enabled(),
+                           ai_info=job.fields.get("_ai"), n_examples=len(_examples(job.company_id)), KIND_TH=KIND_TH)
 
 
 def _set_slot(job, slot, pid, how="manual"):
@@ -748,7 +816,7 @@ def job_teach(job_id):
                 n += 1
     log("teach", f"ใช้งานนี้เป็นตัวอย่างสอน AI ({n} รูป)", job)
     db.session.commit()
-    flash(f"บันทึกเป็นตัวอย่างสอน AI แล้ว {n} รูป — งานถัดไปของบริษัทจะใช้เทียบ", "ok")
+    flash(f"บันทึกเป็นตัวอย่างสอน AI แล้ว {n} รูป — งานถัดไปของบริษัทจะใช้เทียบ (งานที่ Import ไว้แล้ว กด ‘ให้ AI จัดรูปใหม่’ เพื่อจัดใหม่)", "ok")
     return redirect(url_for("main.job_photos", job_id=job.id))
 
 
