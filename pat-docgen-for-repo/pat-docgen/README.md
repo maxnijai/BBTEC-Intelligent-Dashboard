@@ -55,6 +55,16 @@ IMG/
 - ถ้า `SEED_DEMO=1`: `admin@demo.local` และ `doc@demo.local` รหัส = `DEMO_PASSWORD`
 - โลโก้ / ชื่อบนปก / ที่อยู่ ใส่ในเมนู "บริษัท" หลัง login (ไม่เก็บไว้ในโค้ด เพราะ repo เป็น Public)
 
+## อัปเดต v2 (ตาม Requirement ลูกค้า)
+- รูปในหน้า PDF ยืดเต็มกรอบขนาดเดียวกับ Template, หน้า Topo Design / Planwork เป็นแนวนอน
+- จัดรูปตามกฎที่เรียนรู้จาก PAT ตัวอย่าง + AI (Claude Vision) เมื่อใส่ `ANTHROPIC_API_KEY` (ไม่บังคับ) + ปุ่ม "สอน AI จากงานนี้"
+- ระบบสร้างหน้า รายการเอกสารส่งงาน, สรุปผลการตรวจรับ, Link Budget, Deficiency เอง + ลายเซ็น / ชื่อ / วันที่ ผู้ลงนาม
+- Google Sheet ใช้เฉพาะหน้า Loss OTDR, ใบสรุปเคเบิลรื้อถอน, Balance Cable & Material
+- Import ไฟล์ .sor → หน้า Report OTDR ท้ายเล่ม PAT และ AS-BUILT + ค่า L ใน Link Budget, NE = จำนวนโฟลเดอร์หัวต่อ, NC = 2
+- พิกัดจากรูปจุดติดตั้ง closure → ดาวน์โหลด KMZ
+- ลากรูปย้าย/สลับช่องในหน้าจัดรูป
+- Variables เพิ่มเติม (ไม่บังคับ): `ANTHROPIC_API_KEY`, `CLAUDE_MODEL` (ค่าเริ่มต้น claude-haiku-5-5)
+
 ## โครงสร้างโค้ด
 
 ```

@@ -4,7 +4,7 @@ import secrets
 from flask import Flask, abort, request, session
 from flask_login import LoginManager
 
-from .models import Company, User, db
+from .models import Company, User, auto_migrate, db
 
 login_manager = LoginManager()
 login_manager.login_view = "main.login"
@@ -65,6 +65,7 @@ def create_app(test_config=None):
 
     with app.app_context():
         db.create_all()
+        auto_migrate()
         seed(app)
     return app
 

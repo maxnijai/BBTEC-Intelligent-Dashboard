@@ -9,3 +9,4 @@ numpy>=1.26
 pytesseract>=0.3.10
 gunicorn>=22.0
 psycopg2-binary>=2.9
+pyotdr>=2.1

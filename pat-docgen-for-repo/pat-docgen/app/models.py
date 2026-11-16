@@ -54,6 +54,8 @@ class User(UserMixin, db.Model):
     active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=now)
     last_login = db.Column(db.DateTime)
+    signature_path = db.Column(db.String(500))
+    position = db.Column(db.String(200))
     company = db.relationship("Company")
 
     def set_password(self, pw):
@@ -148,6 +150,8 @@ class Photo(db.Model):
     lat = db.Column(db.Float)
     lon = db.Column(db.Float)
     blurry = db.Column(db.Boolean, default=False)
+    kind = db.Column(db.String(30))      # ประเภทรูป (จาก AI / จากการจัดของคน)
+    kconf = db.Column(db.Float)
     uploaded_by = db.Column(db.Integer, db.ForeignKey("user.id"))
     created_at = db.Column(db.DateTime, default=now)
 
@@ -159,9 +163,14 @@ class Attachment(db.Model):
     filename = db.Column(db.String(300))
     path = db.Column(db.String(500))
     pages = db.Column(db.Integer)
+    meta_json = db.Column(db.Text)       # ผลอ่านไฟล์ .sor
     uploaded_by = db.Column(db.Integer, db.ForeignKey("user.id"))
     created_at = db.Column(db.DateTime, default=now)
     uploader = db.relationship("User")
+
+    @property
+    def meta(self):
+        return JsonMixin._load(self.meta_json, {})
 
 
 class Document(db.Model):
@@ -188,3 +197,30 @@ class Audit(db.Model):
     ip = db.Column(db.String(64), default="")
     created_at = db.Column(db.DateTime, default=now, index=True)
     user = db.relationship("User")
+
+
+class Example(db.Model):
+    """รูปตัวอย่างที่ใช้สอน AI (มาจากการที่คนจัด/ยืนยันรูป)"""
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, index=True)
+    kind = db.Column(db.String(30), index=True)
+    path = db.Column(db.String(500))
+    photo_id = db.Column(db.String(32))
+    created_at = db.Column(db.DateTime, default=now)
+
+
+MIGRATIONS = [  # (table, column, DDL type) — เพิ่มคอลัมน์ใหม่ให้ฐานข้อมูลเดิมอัตโนมัติ
+    ("photo", "kind", "VARCHAR(30)"), ("photo", "kconf", "FLOAT"),
+    ("attachment", "meta_json", "TEXT"),
+    ("user", "signature_path", "VARCHAR(500)"), ("user", "position", "VARCHAR(200)"),
+]
+
+
+def auto_migrate():
+    from sqlalchemy import inspect, text
+    insp = inspect(db.engine)
+    for table, col, typ in MIGRATIONS:
+        if table in insp.get_table_names() and col not in [c["name"] for c in insp.get_columns(table)]:
+            q = '"user"' if table == "user" else table
+            with db.engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {q} ADD COLUMN {col} {typ}"))

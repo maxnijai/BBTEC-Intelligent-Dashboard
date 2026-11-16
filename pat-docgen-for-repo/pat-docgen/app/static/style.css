@@ -85,3 +85,6 @@ table.t td{padding:10px 12px;border-top:1px solid #F1F5F9;vertical-align:top}
 .vh{position:absolute;left:-9999px}
 .busy{position:fixed;inset:0;background:rgba(255,255,255,.75);display:none;align-items:center;justify-content:center;z-index:60;font-weight:700;font-size:18px}
 .busy.on{display:flex}
+.m-ai{background:#E0E7FF;color:#3730A3}.m-rule{background:#F3F4F6;color:#374151}
+.slot.dropok{outline:3px dashed #1D4ED8;outline-offset:2px}
+.slot[draggable=true]{cursor:grab}

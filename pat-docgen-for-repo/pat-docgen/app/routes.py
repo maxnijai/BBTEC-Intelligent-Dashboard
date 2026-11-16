@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import re
 import shutil
@@ -10,10 +11,12 @@ from flask import (Blueprint, abort, current_app, flash, jsonify, redirect, rend
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import func, or_
 
-from . import pdfgen
-from .importer import REVIEW_BELOW, run_import
+from . import pdfgen, vision
+from .importer import (REVIEW_BELOW, auto_assign, features, fiber_length_from_images, haversine, norm_closure, ocr_latlon,
+                       run_import, slot_kind)
+from .sorfile import parse_sor
 from .layout import DEFAULT_FIELDS, all_slot_keys, build_pages, closure_list, link_budget, sites_from_link
-from .models import ROLES, STATUS, Attachment, Audit, Company, Document, Job, Photo, User, db, now
+from .models import ROLES, STATUS, Attachment, Audit, Company, Document, Example, Job, Photo, User, db, now
 
 bp = Blueprint("main", __name__)
 
@@ -125,13 +128,16 @@ def dashboard():
 
 
 FIELD_FORM = [
-    ("ข้อมูลหน้าปก", [("sap_no", "SAP No."), ("project", "Project"), ("region", "Region"), ("activity", "Activity")]),
+    ("ข้อมูลหน้าปก / หน้ารายการเอกสาร / หน้าสรุปผลตรวจรับ", [
+        ("sap_no", "SAP No. / SAP Job No."), ("or_no", "OR No."), ("ofc", "OFC (เช่น 12C FIG.8,60C ARSS)"), ("core", "Core"),
+        ("project", "Project (หน้าปก)"), ("inspect_project", "Project (หน้าสรุปผลตรวจรับ)"), ("region", "Region"), ("activity", "Activity")]),
     ("หน้ารูป", [("equip1", "อุปกรณ์ Site 1 (เช่น CX600)"), ("equip2", "อุปกรณ์ Site 2 (เช่น CPE)"),
                  ("power_core1", "Test Power Core (1)"), ("power_core2", "Test Power Core (2)"),
-                 ("closures", "ลำดับหัวต่อ (ว่าง = อ่านจาก KMZ)")]),
-    ("Link Budget", [("lb_L", "L ความยาว (Km.) จาก OTDR"), ("lb_aF", "aF (dB/Km.)"), ("lb_NE", "NE จำนวนจุด splice"),
+                 ("closures", "ลำดับหัวต่อ (ว่าง = อ่านจาก KMZ/โฟลเดอร์)")]),
+    ("Link Budget", [("lb_L", "L ความยาว (Km.) — จาก .sor / รูป OTDR"), ("lb_aF", "aF (dB/Km.)"), ("lb_NE", "NE — นับจากโฟลเดอร์หัวต่อ"),
                      ("lb_aE", "aE (dB)"), ("lb_NC", "NC จำนวน Connector"), ("lb_aC", "aC (dB)"),
-                     ("lb_otdr_max", "OTDR Max (dB)"), ("lb_otdr_min", "OTDR Min (dB)"), ("lb_note", "หมายเหตุ")]),
+                     ("lb_otdr_max", "OTDR Max (dB) — ค่า Fix 4.60"), ("lb_otdr_min", "OTDR Min (dB) — ค่า Fix 4.44"), ("lb_note", "หมายเหตุ")]),
+    ("หน้า Deficiency", [("def_region", "Region (เช่น UPC1)"), ("def_subcon", "Sub-Contractor name (ว่าง = ชื่อบริษัท)")]),
 ]
 
 
@@ -178,38 +184,42 @@ def job_view(job_id):
     s1, s2 = sites_from_link(job.link_name)
     checks = run_checks(job, pages, f, atts)
     return render_template("job.html", job=job, f=f, FIELD_FORM=FIELD_FORM, prog=prog, docs=docs, atts=atts, hist=hist,
-                           STATUS=STATUS, s1=s1, s2=s2, lb=link_budget(f), checks=checks,
-                           sheet_cfg=job.j("sheet_cfg", {}), kmz=job.j("kmz", []), pages=pages)
+                           STATUS=STATUS, s1=s1, s2=s2, lb=link_budget(f), checks=checks, SIG_ROLES=SIG_ROLES,
+                           sheet_cfg=job.j("sheet_cfg", {}), kmz=job.j("kmz", []), pages=pages,
+                           coords=closure_coords(job), ai=vision.enabled())
 
 
 def run_checks(job, pages, f, atts):
     out = []
     a = job.assign
     missing = [s for p in pages for s in p["slots"] if s["caption"] and not a.get(s["key"])]
-    if missing:
-        out.append(("warn", f"ยังไม่มีรูป {len(missing)} ช่อง (จะแสดง 'ไม่มีรูป' ใน PDF)"))
-    else:
-        out.append(("ok", "รูปครบทุกช่อง"))
+    out.append(("warn", f"ยังไม่มีรูป {len(missing)} ช่อง (จะแสดง 'ไม่มีรูป' ใน PDF)") if missing else ("ok", "รูปครบทุกช่อง"))
     rv = [k for k in job.j("review", []) if a.get(k)]
     if rv:
         out.append(("warn", f"มี {len(rv)} ช่องที่ระบบไม่มั่นใจ — ควรตรวจในหน้า 'จัดรูป'"))
     if not any(x.kind == "sheet" for x in atts):
-        out.append(("warn", "ยังไม่ได้แนบ PDF ฟอร์มจาก Google Sheet (Check list / Loss / Material) — PDF จะไม่มีหน้าเหล่านี้"))
+        out.append(("warn", "ยังไม่ได้แนบ PDF จาก Google Sheet (Loss OTDR / ใบสรุปเคเบิลรื้อถอน / Balance Cable)"))
     else:
-        out.append(("ok", "แนบ PDF ฟอร์มจาก Google Sheet แล้ว"))
-    if not job.closures and not f.get("closures"):
-        out.append(("warn", "ไม่พบรายชื่อหัวต่อ (ไม่มี KMZ และไม่มีโฟลเดอร์ SJ#/BJ#)"))
-    lb = link_budget(f)
+        out.append(("ok", "แนบ PDF จาก Google Sheet แล้ว"))
+    nsor = sum(1 for x in atts if x.kind == "sor")
+    out.append(("ok", f"ไฟล์ .sor {nsor} ไฟล์ → หน้า Report OTDR {nsor} หน้า") if nsor else ("warn", "ยังไม่มีไฟล์ .sor (หน้า Report OTDR จะไม่มี)"))
+    for role, label in SIG_ROLES:
+        if not f.get(f"sig_{role}_name"):
+            out.append(("warn", f"ยังไม่ได้ใส่ชื่อผู้ลงนาม: {label}"))
+    if not f.get("lb_L"):
+        out.append(("warn", "ยังไม่มีค่า L (ความยาว) ใน Link Budget"))
+    cl = closure_list(f, job.closures)
     try:
-        ne = float(f.get("lb_NE") or "nan")
-        if job.closures and ne == ne and int(ne) != len(closure_list(f, job.closures)):
-            out.append(("warn", f"NE ใน Link Budget = {int(ne)} แต่จำนวนหัวต่อ = {len(closure_list(f, job.closures))}"))
+        ne = int(float(f.get("lb_NE") or "nan"))
+        if cl and ne != len(cl):
+            out.append(("warn", f"NE ใน Link Budget = {ne} แต่จำนวนหัวต่อ = {len(cl)}"))
     except ValueError:
         pass
-    if lb["total"] is not None and lb["otdr_max"] is not None and abs(lb["otdr_max"] - lb["total"]) > 1.5 and not f.get("lb_note"):
-        out.append(("warn", f"OTDR Max {lb['otdr_max']:.2f} dB ต่างจากค่าคำนวณ {lb['total']:.2f} dB เกิน 1.5 dB — ควรใส่หมายเหตุ"))
-    if not any(x.kind in ("asbuilt", "otdr") for x in atts):
-        out.append(("info", "ยังไม่ได้แนบแบบ As-Built / Report OTDR — AS-BUILT จะเท่ากับ PAT"))
+    miss_ll = [c["closure"] for c in closure_coords(job) if c["lat"] is None]
+    if miss_ll:
+        out.append(("warn", f"ยังไม่มีพิกัดจุดติดตั้ง closure: {', '.join(miss_ll)}"))
+    if not any(x.kind == "asbuilt" for x in atts):
+        out.append(("info", "ยังไม่ได้แนบแบบ As-Built — AS-BUILT จะมีเฉพาะ PAT + Report OTDR"))
     blurry = Photo.query.filter_by(job_id=job.id, blurry=True).count()
     if blurry:
         out.append(("warn", f"รูปอาจเบลอ {blurry} รูป"))
@@ -241,53 +251,235 @@ def job_fields(job_id):
     flash("บันทึกข้อมูลแล้ว", "ok")
     return redirect(url_for("main.job_view", job_id=job.id) + "#data")
 
+# ---------------------------------------------------------------- signatures
+
+
+SIG_ROLES = [("sender", "ผู้ส่งเอกสาร (หน้ารายการเอกสาร)"), ("sub", "Sub Contractor"),
+             ("insp", "Name of Contractor Inspector"), ("mgr", "Name of Contractor Manager (ใช้ในหน้า Deficiency ด้วย)")]
+
+
+def _save_sig(fs, folder, stem):
+    ext = os.path.splitext(fs.filename)[1].lower()
+    if ext not in (".png", ".jpg", ".jpeg"):
+        raise ValueError("ลายเซ็นต้องเป็นไฟล์ PNG หรือ JPG")
+    os.makedirs(folder, exist_ok=True)
+    p = os.path.join(folder, f"{stem}_{uuid.uuid4().hex[:6]}.png")
+    from PIL import Image
+    im = Image.open(fs.stream).convert("RGBA")
+    # ทำพื้นขาวให้โปร่งใส (ลายเซ็นที่ถ่าย/สแกนบนกระดาษขาว)
+    px = im.load()
+    for y in range(im.height):
+        for x in range(im.width):
+            r, g, b, a = px[x, y]
+            if r > 215 and g > 215 and b > 215:
+                px[x, y] = (255, 255, 255, 0)
+    bbox = im.getbbox()
+    if bbox:
+        im = im.crop(bbox)
+    im.thumbnail((600, 200))
+    im.save(p)
+    return p
+
+
+@bp.route("/jobs/<int:job_id>/signatures", methods=["POST"])
+@login_required
+def job_signatures(job_id):
+    job = get_job(job_id, edit=True)
+    f = job.fields
+    folder = os.path.join(job_dir(job), "sig")
+    done = []
+    for role, label in SIG_ROLES:
+        for k in ("name", "date", "pos"):
+            v = request.form.get(f"sig_{role}_{k}")
+            if v is not None:
+                f[f"sig_{role}_{k}"] = v.strip()
+        up = request.files.get(f"sig_{role}_file")
+        try:
+            if up and up.filename:
+                f[f"sig_{role}_img"] = _save_sig(up, folder, role)
+                done.append(label)
+        except ValueError as e:
+            flash(str(e), "error")
+        if request.form.get(f"sig_{role}_mine") == "1" and current_user.signature_path:
+            f[f"sig_{role}_img"] = current_user.signature_path
+            f[f"sig_{role}_name"] = f.get(f"sig_{role}_name") or current_user.name
+            if role == "sender" and not f.get("sig_sender_pos"):
+                f["sig_sender_pos"] = current_user.position or ""
+            done.append(label + " (ลายเซ็นของฉัน)")
+        if request.form.get(f"sig_{role}_clear") == "1":
+            f.pop(f"sig_{role}_img", None)
+    job.setj("fields", f)
+    job.updated_by = current_user.id
+    log("signature", "บันทึกผู้ลงนาม" + (": ลายเซ็น " + ", ".join(done) if done else ""), job)
+    db.session.commit()
+    flash("บันทึกผู้ลงนามแล้ว", "ok")
+    return redirect(url_for("main.job_view", job_id=job.id) + "#sign")
+
+
+@bp.route("/jobs/<int:job_id>/sig/<role>")
+@login_required
+def job_sig_img(job_id, role):
+    job = get_job(job_id)
+    p = job.fields.get(f"sig_{role}_img")
+    if not p or not os.path.exists(p):
+        abort(404)
+    return send_file(p, mimetype="image/png")
+
+
+@bp.route("/profile", methods=["GET", "POST"])
+@login_required
+def profile():
+    u = current_user
+    if request.method == "POST":
+        u.position = request.form.get("position", "").strip()
+        up = request.files.get("signature")
+        if up and up.filename:
+            try:
+                u.signature_path = _save_sig(up, os.path.join(current_app.config["DATA_DIR"], "signatures"), f"u{u.id}")
+                log("profile", "อัปโหลดลายเซ็นของตัวเอง")
+            except ValueError as e:
+                flash(str(e), "error")
+        pw = request.form.get("new_password", "")
+        if pw:
+            if len(pw) < 8 or not u.check_password(request.form.get("old_password", "")):
+                flash("เปลี่ยนรหัสไม่สำเร็จ: รหัสเดิมไม่ถูก หรือรหัสใหม่สั้นกว่า 8 ตัว", "error")
+            else:
+                u.set_password(pw)
+                log("profile", "เปลี่ยนรหัสผ่าน")
+                flash("เปลี่ยนรหัสผ่านแล้ว", "ok")
+        db.session.commit()
+        return redirect(url_for("main.profile"))
+    return render_template("profile.html")
+
+
+@bp.route("/profile/sig")
+@login_required
+def profile_sig():
+    if not current_user.signature_path or not os.path.exists(current_user.signature_path):
+        abort(404)
+    return send_file(current_user.signature_path, mimetype="image/png")
+
 # ---------------------------------------------------------------- import photos
+
+
+def _examples(company_id):
+    rows = Example.query.filter_by(company_id=company_id).order_by(Example.created_at.desc()).all()
+    out, seen = [], Counter()
+    for r in rows:
+        if seen[r.kind] < 2 and os.path.exists(r.path):
+            out.append((r.kind, r.path))
+            seen[r.kind] += 1
+    return out
+
+
+def _add_example(job, photo, kind):
+    if not kind or not photo:
+        return
+    if Example.query.filter_by(company_id=job.company_id, photo_id=photo.id, kind=kind).first():
+        return
+    db.session.add(Example(company_id=job.company_id, kind=kind, path=photo.thumb, photo_id=photo.id))
+    # เก็บล่าสุด 6 รูปต่อประเภท
+    old = Example.query.filter_by(company_id=job.company_id, kind=kind).order_by(Example.created_at.desc()).offset(6).all()
+    for o in old:
+        db.session.delete(o)
+
+
+def _store_sor(job, name, data):
+    meta = parse_sor(data, name)
+    d = os.path.join(job_dir(job), "files")
+    os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, uuid.uuid4().hex[:10] + ".sor")
+    with open(path, "wb") as fh:
+        fh.write(data)
+    db.session.add(Attachment(job_id=job.id, kind="sor", filename=name, path=path, pages=1,
+                              meta_json=json.dumps(meta, ensure_ascii=False), uploaded_by=current_user.id))
+    f = job.fields
+    if meta.get("length_km") and not f.get("lb_L"):
+        f["lb_L"] = f"{meta['length_km']:.3f}"
+        job.setj("fields", f)
+    return meta
 
 
 def do_import(job, data, filename):
     s1, s2 = sites_from_link(job.link_name)
-    tmpdir = os.path.join(job_dir(job), "photos")
     try:
-        res = run_import(data, tmpdir, s1, s2)
+        res = run_import(data, os.path.join(job_dir(job), "photos"), s1, s2)
     except Exception as e:  # pragma: no cover
+        current_app.logger.exception("import failed")
         flash(f"Import ไม่สำเร็จ: {e}", "error")
         return
-    for p in res["photos"]:
+    photos = res["photos"]
+    ai_note = ""
+    if vision.enabled() and photos:
+        targets = [(p["id"], p["path"]) for p in photos if p["group"] not in ("design", "planwork", "route")]
+        result, usage = vision.classify(targets, _examples(job.company_id))
+        for p in photos:
+            r = result.get(p["id"])
+            if r:
+                p["kind"], p["kconf"] = r.get("kind"), float(r.get("conf") or 0.8)
+                if r.get("lat") and r.get("lon") and not p.get("lat"):
+                    try:
+                        p["lat"], p["lon"] = float(r["lat"]), float(r["lon"])
+                    except (TypeError, ValueError):
+                        pass
+        ai_note = f", AI จัดประเภท {len(result)} รูป ({usage['in'] + usage['out']:,} tokens ≈ ${usage['usd']})"
+    # ใช้รูปเดิมที่ import ไว้แล้วร่วมด้วย (Import หลายรอบ)
+    prev = [{"id": p.id, "rel": p.rel, "name": p.name, "group": p.group, "sub": (int(p.sub) if p.group in ("site", "plug") and p.sub.isdigit() else p.sub),
+             "kind": p.kind, "kconf": p.kconf, "path": p.path, "feat": features(p.path), "exif_time": None, "lat": p.lat, "lon": p.lon}
+            for p in Photo.query.filter_by(job_id=job.id).all()]
+    for p in photos:
         db.session.add(Photo(id=p["id"], job_id=job.id, rel=p["rel"], name=p["name"], group=p["group"], sub=str(p["sub"] or ""),
-                             path=p["path"], thumb=p["thumb"], lat=p.get("lat"), lon=p.get("lon"),
-                             blurry=bool(p.get("blurry")), uploaded_by=current_user.id))
+                             path=p["path"], thumb=p["thumb"], lat=p.get("lat"), lon=p.get("lon"), kind=p.get("kind"),
+                             kconf=p.get("kconf"), blurry=bool(p.get("blurry")), uploaded_by=current_user.id))
+    cl = job.closures
+    for c in res["closures"]:
+        if c not in cl:
+            cl.append(c)
+    job.setj("closures", cl)
+    assign_new, conf_new, method_new = auto_assign(prev + photos, closure_list(job.fields, cl))
     assign, conf, method = job.assign, job.j("conf", {}), job.j("method", {})
     review = set(job.j("review", []))
     added = 0
-    for slot, pid in res["assign"].items():
+    for slot, pid in assign_new.items():
         if not assign.get(slot):
             assign[slot] = pid
-            conf[slot] = res["conf"][slot]
-            method[slot] = res["method"][slot]
-            if res["conf"][slot] < REVIEW_BELOW:
+            conf[slot], method[slot] = conf_new[slot], method_new[slot]
+            if conf_new[slot] < REVIEW_BELOW:
                 review.add(slot)
             added += 1
     job.setj("assign", assign)
     job.setj("conf", conf)
     job.setj("method", method)
     job.setj("review", sorted(review))
-    cl = job.closures
-    for c in res["closures"]:
-        if c not in cl:
-            cl.append(c)
-    job.setj("closures", cl)
+    f = job.fields
     if res["kmz"]:
         job.setj("kmz", res["kmz"])
-        f = job.fields
-        if not f.get("lb_NE"):
-            f["lb_NE"] = str(len([n for n, _, _ in res["kmz"] if re.search(r"[SB]J", n, re.I)]))
+    # NE = จำนวนอัลบั้ม/โฟลเดอร์หัวต่อ
+    if res["closure_folders"] and not f.get("lb_NE"):
+        f["lb_NE"] = str(len(res["closure_folders"]))
+    elif res["closures"] and not f.get("lb_NE"):
+        f["lb_NE"] = str(len(res["closures"]))
+    job.setj("fields", f)
+    for name, sdata in res["sors"]:
+        try:
+            _store_sor(job, name, sdata)
+        except Exception as e:  # pragma: no cover
+            flash(f"อ่าน {name} ไม่ได้: {e}", "error")
+    f = job.fields
+    if not f.get("lb_L"):
+        L = fiber_length_from_images(photos)
+        if L:
+            f["lb_L"] = f"{L:.3f}"
             job.setj("fields", f)
+    db.session.flush()
+    fill_closure_coords(job)
     job.updated_by = current_user.id
-    unknown = sum(1 for p in res["photos"] if p["group"] == "unknown")
-    log("import", f"Import {filename}: {len(res['photos'])} รูป, วางเข้าช่องอัตโนมัติ {added} ช่อง, "
-                  f"หัวต่อ {len(res['closures'])} จุด, ไม่ทราบกลุ่ม {unknown} รูป" + (", มี KMZ" if res["kmz"] else ""), job)
+    unknown = sum(1 for p in photos if p["group"] == "unknown")
+    log("import", f"Import {filename}: {len(photos)} รูป, วางเข้าช่องอัตโนมัติ {added} ช่อง, "
+                  f"หัวต่อ {len(res['closures'])} จุด, .sor {len(res['sors'])} ไฟล์, ไม่ทราบกลุ่ม {unknown} รูป"
+                  + (", มี KMZ" if res["kmz"] else "") + ai_note, job)
     db.session.commit()
-    flash(f"Import {len(res['photos'])} รูป — วางเข้าช่องให้ {added} ช่อง (ให้ตรวจ {len([s for s in review if assign.get(s)])} ช่อง)", "ok")
+    flash(f"Import {len(photos)} รูป — วางเข้าช่องให้ {added} ช่อง (ให้ตรวจ {len([s for s in review if assign.get(s)])} ช่อง){ai_note}", "ok")
 
 
 @bp.route("/jobs/<int:job_id>/import", methods=["POST"])
@@ -301,7 +493,6 @@ def job_import(job_id):
     if len(files) == 1 and files[0].filename.lower().endswith(".zip"):
         do_import(job, files[0].read(), files[0].filename)
     else:
-        # เลือกหลายไฟล์ / ทั้งโฟลเดอร์จาก browser -> ห่อเป็น zip ในหน่วยความจำ (เก็บชื่อโฟลเดอร์ไว้)
         import zipfile
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w") as z:
@@ -309,6 +500,112 @@ def job_import(job_id):
                 z.writestr(f.filename, f.read())
         do_import(job, buf.getvalue(), f"{len(files)} ไฟล์")
     return redirect(url_for("main.job_photos", job_id=job.id))
+
+# ---------------------------------------------------------------- closure coordinates / KMZ
+
+
+def closure_coords(job):
+    a = job.assign
+    design = {}
+    for n, la, lo in job.j("kmz", []):
+        c = norm_closure(n)
+        if c:
+            design[c] = (la, lo)
+    manual = job.fields.get("_coords", {})
+    out = []
+    for c in closure_list(job.fields, job.closures):
+        pid = a.get(f"closure:{c}:pole")
+        p = db.session.get(Photo, pid) if pid and pid != "NA" else None
+        lat, lon, src = None, None, ""
+        if c in manual:
+            lat, lon, src = manual[c][0], manual[c][1], "กรอกเอง"
+        elif p and p.lat:
+            lat, lon, src = p.lat, p.lon, "จากรูป"
+        d = None
+        if lat is not None and c in design:
+            d = round(haversine((lat, lon), design[c]))
+        out.append({"closure": c, "photo": p, "lat": lat, "lon": lon, "src": src, "design": design.get(c), "dist": d})
+    return out
+
+
+def fill_closure_coords(job, force=False):
+    """อ่านพิกัดบนรูปจุดติดตั้ง closure (รูปที่ 3) ที่ยังไม่มีพิกัด"""
+    design = {norm_closure(n): (la, lo) for n, la, lo in job.j("kmz", []) if norm_closure(n)}
+    for slot, pid in job.assign.items():
+        if not slot.endswith(":pole") or not pid or pid == "NA":
+            continue
+        p = db.session.get(Photo, pid)
+        if not p or (p.lat and not force):
+            continue
+        ll = ocr_latlon(p.path, near=design.get(slot.split(":")[1]))
+        if not ll and vision.enabled():
+            t = vision.read_text(p.path, "อ่านพิกัด latitude, longitude ที่พิมพ์บนรูปนี้ ตอบในรูปแบบ lat,lon เท่านั้น ถ้าไม่มีตอบ none")
+            m = re.search(r"(1\d\.\d{3,})\D+(1\d\d\.\d{3,})", t or "")
+            ll = (float(m.group(1)), float(m.group(2))) if m else None
+        if ll:
+            p.lat, p.lon = ll
+
+
+@bp.route("/jobs/<int:job_id>/coords", methods=["POST"])
+@login_required
+def job_coords(job_id):
+    job = get_job(job_id, edit=True)
+    f = job.fields
+    manual = f.get("_coords", {})
+    for c in closure_list(f, job.closures):
+        v = request.form.get(f"ll_{c}", "").strip()
+        if v:
+            m = re.match(r"\s*\+?(-?\d+\.\d+)\s*[, ]\s*\+?(-?\d+\.\d+)", v)
+            if m:
+                manual[c] = [float(m.group(1)), float(m.group(2))]
+        elif c in manual and request.form.get(f"clr_{c}"):
+            manual.pop(c)
+    f["_coords"] = manual
+    job.setj("fields", f)
+    if request.form.get("reocr"):
+        fill_closure_coords(job, force=True)
+    log("coords", "แก้พิกัดจุดติดตั้ง closure", job)
+    db.session.commit()
+    flash("บันทึกพิกัดแล้ว", "ok")
+    return redirect(url_for("main.job_view", job_id=job.id) + "#kmz")
+
+
+@bp.route("/jobs/<int:job_id>/closures.kmz")
+@login_required
+def job_kmz(job_id):
+    import zipfile
+    job = get_job(job_id)
+    rows = closure_coords(job)
+    pm = []
+    z = io.BytesIO()
+    with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
+        for r in rows:
+            if r["lat"] is None:
+                continue
+            img = ""
+            if r["photo"]:
+                fn = f"files/{r['closure'].replace('#', '')}.jpg"
+                zf.write(r["photo"].thumb, fn)
+                img = f'<img src="{fn}" width="320"/><br/>'
+            dist = f"ห่างจากจุดในแบบ {r['dist']} ม.<br/>" if r["dist"] is not None else ""
+            desc = f"<![CDATA[{img}<b>{r['closure']}</b><br/>{r['lat']:.6f}, {r['lon']:.6f}<br/>{dist}ที่มา: {r['src']}]]>"
+            pm.append(f"<Placemark><name>{r['closure']}</name><styleUrl>#cl</styleUrl><description>{desc}</description>"
+                      f"<Point><coordinates>{r['lon']:.6f},{r['lat']:.6f},0</coordinates></Point></Placemark>")
+        line = [f"{r['lon']:.6f},{r['lat']:.6f},0" for r in rows if r["lat"] is not None]
+        route = (f"<Placemark><name>เส้นทางตามจุด closure</name><Style><LineStyle><color>ff00a5ff</color><width>3</width></LineStyle></Style>"
+                 f"<LineString><coordinates>{' '.join(line)}</coordinates></LineString></Placemark>") if len(line) > 1 else ""
+        kml = (f'<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document>'
+               f"<name>{html_escape(job.link_name)} - จุดติดตั้ง closure</name>"
+               f'<Style id="cl"><IconStyle><scale>1.1</scale><Icon><href>http://maps.google.com/mapfiles/kml/paddle/red-circle.png</href></Icon></IconStyle></Style>'
+               f"{''.join(pm)}{route}</Document></kml>")
+        zf.writestr("doc.kml", kml)
+    log("kmz", f"ดาวน์โหลด KMZ จุดติดตั้ง closure ({len(pm)} จุด)", job)
+    db.session.commit()
+    z.seek(0)
+    return send_file(z, as_attachment=True, download_name=safe_name(job.link_name.replace(" ", "_")) + "_closures.kmz",
+                     mimetype="application/vnd.google-earth.kmz")
+
+# ---------------------------------------------------------------- photo review
 
 
 @bp.route("/jobs/<int:job_id>/photos")
@@ -321,29 +618,69 @@ def job_photos(job_id):
     groups = {}
     for p in photos:
         label = {"site": "Site", "closure": "หัวต่อ", "plug": "Plug Port", "power": "Power", "planwork": "Planwork",
-                 "design": "Design", "route": "Route", "unknown": "ไม่ทราบกลุ่ม"}.get(p.group, p.group)
+                 "design": "Design", "route": "Route", "otdr": "OTDR", "unknown": "ไม่ทราบกลุ่ม"}.get(p.group, p.group)
         key = os.path.dirname(p.rel) or "(root)"
         groups.setdefault(key, {"label": label, "items": []})["items"].append(p)
-    sheet_n = len(pdfgen.parse_ranges(job.j("sheet_cfg", {}).get("forms", ""), job.j("sheet_cfg", {}).get("count", 0))) or 5
+    cfg = job.j("sheet_cfg", {})
+    sheet_n = len(pdfgen.parse_ranges(cfg.get("forms", ""), cfg.get("count", 0))) or 3
     pno, n = [], 1
     for p in pages:
         pno.append(n)
         n += sheet_n if p["kind"] == "sheet" else 1
     s1, s2 = sites_from_link(job.link_name)
     c1, c2 = s1.split("_", 1)[-1], s2.split("_", 1)[-1]
+
     def pref(key):
-        if key.startswith("site1"): return c1
-        if key.startswith("site2"): return c2
-        if key.startswith("plug1"): return "PLUG*" + c1
-        if key.startswith("plug2"): return "PLUG*" + c2
-        if key.startswith("closure:"): return key.split(":")[1]
-        if key.startswith("power"): return "POWER"
-        if key == "planwork": return "PLAN"
+        if key.startswith("site1"):
+            return c1
+        if key.startswith("site2"):
+            return c2
+        if key.startswith("plug1"):
+            return "PLUG*" + c1
+        if key.startswith("plug2"):
+            return "PLUG*" + c2
+        if key.startswith("closure:"):
+            return key.split(":")[1]
+        if key.startswith("power"):
+            return "POWER"
+        if key == "planwork":
+            return "PLAN"
         return ""
     prefs = {k: pref(k) for k in all_slot_keys(pages)}
     return render_template("photos.html", job=job, pages=pages, pno=pno, prefs=prefs, photos=photos, used=used, groups=groups,
                            assign=job.assign, conf=job.j("conf", {}), method=job.j("method", {}),
-                           review=set(job.j("review", [])), prog=progress(job, pages), STATUS=STATUS)
+                           review=set(job.j("review", [])), prog=progress(job, pages), STATUS=STATUS, ai=vision.enabled())
+
+
+def _set_slot(job, slot, pid, how="manual"):
+    a, method, conf, review = job.assign, job.j("method", {}), job.j("conf", {}), set(job.j("review", []))
+    if pid in ("", None):
+        a.pop(slot, None)
+    else:
+        a[slot] = pid
+    method[slot], conf[slot] = how, 1.0
+    review.discard(slot)
+    # Site รอบที่ 2 ใช้รูปชุดเดียวกับ Plug Port (ถ้ายังเป็นค่าที่ระบบตั้งตามกฎ)
+    m = re.match(r"plug(\d):(location|odf1|odf2)$", slot)
+    if m:
+        dst = f"site{m.group(1)}:r2:" + {"location": "location", "odf1": "odf", "odf2": "core"}[m.group(2)]
+        if method.get(dst) in ("rule", None):
+            if pid:
+                a[dst] = pid
+            else:
+                a.pop(dst, None)
+            method[dst], conf[dst] = "rule", 1.0
+            review.discard(dst)
+    job.setj("assign", a)
+    job.setj("method", method)
+    job.setj("conf", conf)
+    job.setj("review", sorted(review))
+    if pid and pid != "NA":
+        p = db.session.get(Photo, pid)
+        k = slot_kind(slot)
+        if p and k:
+            p.kind = k
+            _add_example(job, p, k)
 
 
 @bp.route("/jobs/<int:job_id>/assign", methods=["POST"])
@@ -354,28 +691,34 @@ def job_assign(job_id):
     pid = request.form.get("photo", "")
     if slot not in all_slot_keys(job_pages(job)):
         return jsonify(ok=False, error="slot"), 400
-    a, review, method, conf = job.assign, set(job.j("review", [])), job.j("method", {}), job.j("conf", {})
-    old = a.get(slot)
-    if pid == "":
-        a.pop(slot, None)
-    elif pid == "NA":
-        a[slot] = "NA"
-    else:
+    if pid not in ("", "NA"):
         p = db.session.get(Photo, pid)
         if not p or p.job_id != job.id:
             return jsonify(ok=False, error="photo"), 400
-        a[slot] = pid
-    method[slot] = "manual"
-    conf[slot] = 1.0
-    review.discard(slot)
-    job.setj("assign", a)
-    job.setj("review", sorted(review))
-    job.setj("method", method)
-    job.setj("conf", conf)
+    old = job.assign.get(slot)
+    _set_slot(job, slot, pid)
     job.updated_by = current_user.id
     log("assign", f"{slot}: {old or '-'} → {pid or 'ว่าง'}", job)
     db.session.commit()
-    return jsonify(ok=True, prog=progress(job))
+    return jsonify(ok=True, prog=progress(job), assign=job.assign)
+
+
+@bp.route("/jobs/<int:job_id>/swap", methods=["POST"])
+@login_required
+def job_swap(job_id):
+    """ลากรูปจากช่องหนึ่งไปอีกช่อง: ถ้าช่องปลายทางมีรูป จะสลับกัน"""
+    job = get_job(job_id, edit=True)
+    a_, b_ = request.form.get("from", ""), request.form.get("to", "")
+    keys = all_slot_keys(job_pages(job))
+    if a_ not in keys or b_ not in keys or a_ == b_:
+        return jsonify(ok=False), 400
+    pa, pb = job.assign.get(a_), job.assign.get(b_)
+    _set_slot(job, b_, pa or "")
+    _set_slot(job, a_, pb or "")
+    job.updated_by = current_user.id
+    log("swap", f"ย้ายรูป {a_} ⇄ {b_}", job)
+    db.session.commit()
+    return jsonify(ok=True, prog=progress(job), assign=job.assign)
 
 
 @bp.route("/jobs/<int:job_id>/confirm-all", methods=["POST"])
@@ -387,6 +730,28 @@ def job_confirm_all(job_id):
     log("confirm", f"ยืนยันรูปที่ระบบเลือกทั้งหมด ({n} ช่อง)", job)
     db.session.commit()
     flash("ยืนยันทุกช่องแล้ว", "ok")
+    return redirect(url_for("main.job_photos", job_id=job.id))
+
+
+@bp.route("/jobs/<int:job_id>/teach", methods=["POST"])
+@login_required
+def job_teach(job_id):
+    """ใช้การจัดรูปของงานนี้เป็นตัวอย่างสอน AI สำหรับงานถัดไปของบริษัท"""
+    job = get_job(job_id)
+    if not current_user.can_edit(job):
+        abort(403)
+    n = 0
+    for slot, pid in job.assign.items():
+        k = slot_kind(slot)
+        if k and pid and pid != "NA":
+            p = db.session.get(Photo, pid)
+            if p:
+                p.kind = k
+                _add_example(job, p, k)
+                n += 1
+    log("teach", f"ใช้งานนี้เป็นตัวอย่างสอน AI ({n} รูป)", job)
+    db.session.commit()
+    flash(f"บันทึกเป็นตัวอย่างสอน AI แล้ว {n} รูป — งานถัดไปของบริษัทจะใช้เทียบ", "ok")
     return redirect(url_for("main.job_photos", job_id=job.id))
 
 
@@ -402,7 +767,7 @@ def photo_file(pid, size):
 # ---------------------------------------------------------------- attachments
 
 
-ATT_KIND = {"sheet": "PDF ฟอร์มจาก Google Sheet", "asbuilt": "แบบ As-Built (ปก/Symbol/Core Assignment)", "otdr": "Report OTDR"}
+ATT_KIND = {"sheet": "PDF จาก Google Sheet", "asbuilt": "แบบ As-Built (ปก/Symbol/Core Assignment)", "sor": "ไฟล์ OTDR .sor"}
 
 
 @bp.route("/jobs/<int:job_id>/attach", methods=["POST"])
@@ -416,6 +781,13 @@ def job_attach(job_id):
         if not f or not f.filename:
             continue
         data = f.read()
+        if kind == "sor":
+            try:
+                meta = _store_sor(job, f.filename, data)
+                log("attach", f"แนบ .sor: {f.filename} (ยาว {meta.get('length_km')} km, Total loss {meta.get('total_loss')} dB)", job)
+            except Exception as e:
+                flash(f"{f.filename}: อ่านไฟล์ .sor ไม่ได้ ({e})", "error")
+            continue
         if not data.startswith(b"%PDF"):
             flash(f"{f.filename} ไม่ใช่ไฟล์ PDF", "error")
             continue
@@ -429,12 +801,9 @@ def job_attach(job_id):
                 db.session.delete(old)
             cfg = pdfgen.detect_sheet_pages(data)
             job.setj("sheet_cfg", cfg)
-            msg = (f"ตรวจพบหน้าฟอร์ม {cfg['forms'] or '-'}, Link budget {cfg['linkbudget'] or '-'}, "
-                   f"Deficiency {cfg['deficiency'] or '-'} (จาก {cfg['count']} หน้า)")
-            flash(msg, "ok")
-        att = Attachment(job_id=job.id, kind=kind, filename=f.filename, path=path, pages=pdfgen.count_pages(data),
-                         uploaded_by=current_user.id)
-        db.session.add(att)
+            flash(f"ตรวจพบหน้า Loss / ใบสรุปเคเบิลรื้อถอน / Balance Cable ที่หน้า {cfg['forms'] or '-'} (จาก {cfg['count']} หน้า)", "ok")
+        db.session.add(Attachment(job_id=job.id, kind=kind, filename=f.filename, path=path, pages=pdfgen.count_pages(data),
+                                  uploaded_by=current_user.id))
         log("attach", f"แนบ {ATT_KIND[kind]}: {f.filename}", job)
     job.updated_by = current_user.id
     db.session.commit()
@@ -446,10 +815,9 @@ def job_attach(job_id):
 def job_sheet_cfg(job_id):
     job = get_job(job_id, edit=True)
     cfg = job.j("sheet_cfg", {})
-    for k in ("forms", "linkbudget", "deficiency"):
-        cfg[k] = request.form.get(k, "").strip()
+    cfg["forms"] = request.form.get("forms", "").strip()
     job.setj("sheet_cfg", cfg)
-    log("sheet_cfg", f"ตั้งหน้าที่ใช้จาก Google Sheet: ฟอร์ม {cfg['forms']}, LB {cfg['linkbudget']}, Deficiency {cfg['deficiency']}", job)
+    log("sheet_cfg", f"ตั้งหน้าที่ใช้จาก Google Sheet: {cfg['forms']}", job)
     db.session.commit()
     flash("บันทึกการเลือกหน้าแล้ว", "ok")
     return redirect(url_for("main.job_view", job_id=job.id) + "#files")
@@ -472,6 +840,11 @@ def safe_name(s):
     return re.sub(r"[^\w\-.]+", "_", s).strip("_")
 
 
+def html_escape(s):
+    import html
+    return html.escape(s or "")
+
+
 @bp.route("/jobs/<int:job_id>/generate", methods=["POST"])
 @login_required
 def job_generate(job_id):
@@ -489,13 +862,14 @@ def job_generate(job_id):
     atts = Attachment.query.filter_by(job_id=job.id).order_by(Attachment.created_at).all()
     sheet = next((a for a in atts if a.kind == "sheet"), None)
     sheet_bytes = open(sheet.path, "rb").read() if sheet else None
+    if sheet_bytes and job.j("sheet_cfg", {}).get("v") != 2:  # งานที่แนบไว้ก่อนอัปเดต: หาหน้าใหม่ตามรูปแบบใหม่
+        job.setj("sheet_cfg", pdfgen.detect_sheet_pages(sheet_bytes))
+    sors = [a.meta for a in sorted([a for a in atts if a.kind == "sor"], key=lambda a: a.filename) if a.meta]
+    asb = [open(a.path, "rb").read() for a in atts if a.kind == "asbuilt"]
     jobd = {"link_name": job.link_name, "fields": {**DEFAULT_FIELDS, **job.fields}, "template_version": "3.0"}
     try:
-        pat = pdfgen.build_pat(jobd, comp, pages, by_slot, company.template_logo_path or None, company.logo_path or None,
-                               sheet_bytes, job.j("sheet_cfg", {}))
-        extras = [open(a.path, "rb").read() for a in atts if a.kind == "asbuilt"] + \
-                 [open(a.path, "rb").read() for a in atts if a.kind == "otdr"]
-        asb = pdfgen.build_asbuilt(pat, extras)
+        pat, asbuilt = pdfgen.build_docs(jobd, comp, pages, by_slot, company.template_logo_path or None, company.logo_path or None,
+                                         sheet_bytes, job.j("sheet_cfg", {}), sors, asb)
     except Exception as e:
         current_app.logger.exception("generate failed")
         flash(f"สร้าง PDF ไม่สำเร็จ: {e}", "error")
@@ -504,7 +878,7 @@ def job_generate(job_id):
     d = os.path.join(job_dir(job), "out")
     os.makedirs(d, exist_ok=True)
     base = safe_name(job.link_name.replace(" ", "_"))
-    for kind, data, prefix in (("PAT", pat, "PAT_"), ("ASBUILT", asb, "PATAS-BUILT_")):
+    for kind, data, prefix in (("PAT", pat, "PAT_"), ("ASBUILT", asbuilt, "PATAS-BUILT_")):
         fn = f"{prefix}{base}.pdf"
         path = os.path.join(d, f"v{ver}_{fn}")
         with open(path, "wb") as fh:
@@ -514,7 +888,7 @@ def job_generate(job_id):
     if job.status in ("draft", "rejected"):
         job.status = "ready"
     job.updated_by = current_user.id
-    log("generate", f"สร้าง PDF v{ver}: PAT {pdfgen.count_pages(pat)} หน้า, AS-BUILT {pdfgen.count_pages(asb)} หน้า", job)
+    log("generate", f"สร้าง PDF v{ver}: PAT {pdfgen.count_pages(pat)} หน้า, AS-BUILT {pdfgen.count_pages(asbuilt)} หน้า", job)
     db.session.commit()
     flash(f"สร้าง PDF v{ver} เรียบร้อย", "ok")
     return redirect(url_for("main.job_view", job_id=job.id) + "#docs")

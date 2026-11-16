@@ -72,15 +72,18 @@ def haversine(a, b):
 # ---------------------------------------------------------------- image utils
 
 
-def open_image(path):
+def open_image(path, max_side=None):
     im = Image.open(path)
+    if max_side and im.format == "JPEG":
+        # ให้ตัวถอด JPEG ย่อขนาดตั้งแต่ตอนอ่าน (เร็วขึ้นหลายเท่า)
+        im.draft("RGB", (max_side, max_side))
     im = ImageOps.exif_transpose(im)
     return im.convert("RGB")
 
 
 def save_variants(src_path, out_dir, stem):
     """สร้างรูปสำหรับ PDF (ยาวสุด 1400px) และ thumbnail 360px"""
-    im = open_image(src_path)
+    im = open_image(src_path, 1150)
     big = im.copy()
     big.thumbnail((1150, 1150))
     big_path = os.path.join(out_dir, stem + ".jpg")
@@ -120,29 +123,44 @@ def features(path):
 GPS_RX = re.compile(r"\+?\s*(1[0-9])[.,](\d{4,})\D{0,4}?\+?\s*(\d{3})[.,](\d{4,})")
 
 
-def ocr_latlon(path):
-    """อ่านพิกัดที่แอปกล้องพิมพ์ไว้บนรูป (มุมขวาบน หรือ ขวาล่าง)"""
+def ocr_latlon(path, near=None):
+    """อ่านพิกัดที่แอปกล้องพิมพ์ไว้บนรูป (มุมขวาบน หรือ ขวาล่าง)
+    อ่านหลายแบบ (หลาย threshold/psm) แล้วโหวต; ถ้ารู้จุดที่ควรอยู่ (near) เลือกค่าที่ใกล้สุด"""
     if pytesseract is None:
         return None
     im = Image.open(path).convert("RGB")
     w, h = im.size
+    cands = []
     for box in ((int(w * .35), 0, w, int(h * .2)), (int(w * .25), int(h * .78), w, h)):
         c = np.asarray(im.crop(box)).astype(int)
         r, g, b = c[..., 0], c[..., 1], c[..., 2]
-        for mk in ((r > 170) & (r - b > 70) & (g > 80), (r > 200) & (g > 200) & (b > 200), (r > 150) & (r - b > 50)):
+        for mk in ((r > 170) & (r - b > 70) & (g > 80), (r > 200) & (g > 200) & (b > 200), (r > 150) & (r - b > 50),
+                   (r > 190) & (r - b > 90)):
             bw = Image.fromarray(np.where(mk, 0, 255).astype("uint8"))
-            bw = bw.resize((bw.width * 2, bw.height * 2)).filter(ImageFilter.MedianFilter(3))
-            try:
-                t = pytesseract.image_to_string(bw, lang="eng", config="--psm 6 -c tessedit_char_whitelist=0123456789.,+:-/ ")
-            except Exception:
-                return None
-            m = GPS_RX.search(t)
-            if m:
-                lat = float(m.group(1) + "." + m.group(2))
-                lon = float(m.group(3) + "." + m.group(4))
-                if 5 < lat < 21 and 97 < lon < 106:
-                    return lat, lon
-    return None
+            for scale, psm in ((2, 6), (3, 7)):
+                x = bw.resize((bw.width * scale, bw.height * scale)).filter(ImageFilter.MedianFilter(3))
+                try:
+                    t = pytesseract.image_to_string(x, lang="eng", config=f"--psm {psm} -c tessedit_char_whitelist=0123456789.,+:-/ ")
+                except Exception:
+                    return None
+                for m in GPS_RX.finditer(t):
+                    lat = float(m.group(1) + "." + m.group(2)[:6])
+                    lon = float(m.group(3) + "." + m.group(4)[:6])
+                    if 5 < lat < 21 and 97 < lon < 106:
+                        cands.append((round(lat, 6), round(lon, 6)))
+                # พอแล้วเมื่ออ่านได้ค่าเดิมซ้ำ 2 ครั้ง (และใกล้จุดในแบบ ถ้ามี)
+                if cands:
+                    from collections import Counter as _C
+                    top, n = _C(cands).most_common(1)[0]
+                    if n >= 2 and (not near or haversine(top, near) < 300):
+                        return top
+    if not cands:
+        return None
+    if near:
+        return min(cands, key=lambda ll: haversine(ll, near))
+    from collections import Counter as _C
+    return _C(cands).most_common(1)[0][0]
+
 
 # ---------------------------------------------------------------- classify folder of closure photos
 
@@ -163,7 +181,7 @@ def assign_closure_roles(photos):
         elif s > second:
             second = s
     margin = best - max(second, 0)
-    conf = 0.6 + min(0.39, margin * 1.5)
+    conf = 0.5 + min(0.45, margin * 1.5)
     return {p: (roles[i], round(conf, 2)) for i, p in enumerate(best_perm)}
 
 # ---------------------------------------------------------------- เวลาถ่าย (ใช้เรียงลำดับ)
@@ -192,9 +210,6 @@ def photo_time_key(p):
     return (0 if t is not None else 1, t or 0, p["name"])
 
 
-# ---------------------------------------------------------------- main import
-
-
 def classify_path(rel, s1, s2):
     """จากพาธในไฟล์ ZIP บอกว่ารูปอยู่กลุ่มไหน"""
     parts = [p for p in re.split(r"[\\/]", rel) if p]
@@ -220,6 +235,8 @@ def classify_path(rel, s1, s2):
     site = 1 if c1 in joined else 2 if c2 in joined else None
     if "PLUG" in joined:
         return ("plug", site)
+    if "OTDR" in joined:
+        return ("otdr", None)
     if "POWER" in joined or "OPM" in joined:
         return ("power", None)
     if site:
@@ -227,23 +244,47 @@ def classify_path(rel, s1, s2):
     return ("unknown", None)
 
 
-def run_import(zip_bytes, job_dir, s1, s2, sort_key=None):
-    """แตก ZIP, ทำรูปย่อ, จับคู่ช่อง  คืนค่า dict(photos=[...], kmz=[...], assign={slot: photo_id}, review=[slot...])"""
+# ---------------------------------------------------------------- main import
+
+SLOT_KIND = {  # ประเภทรูปที่ควรอยู่ในช่อง (เรียนรู้จาก PAT ตัวอย่าง)
+    "location": "site_location", "odf": "odf_rack", "core": "core_label",
+    "port1": "equipment_port", "port2": "equipment_port", "odf1": "odf_rack", "odf2": "core_label",
+    "front": "closure_front", "inside": "closure_inside", "pole": "closure_install",
+}
+
+
+def slot_kind(slot):
+    if slot.startswith("power:"):
+        return "power_meter"
+    return SLOT_KIND.get(slot.split(":")[-1])
+
+
+def extract_zip(zip_bytes, job_dir, s1, s2):
+    """แตก ZIP -> (photos, kmz_points, sor_files[(name, bytes)], closure_folders)"""
     os.makedirs(job_dir, exist_ok=True)
     z = zipfile.ZipFile(io.BytesIO(zip_bytes))
-    photos, kmz_pts = [], []
+    photos, kmz_pts, sors, folders = [], [], [], []
     tmp_dir = os.path.join(job_dir, "_src")
     os.makedirs(tmp_dir, exist_ok=True)
     for info in z.infolist():
+        rel = info.filename
+        if "__MACOSX" in rel:
+            continue
+        for part in [p for p in re.split(r"[\\/]", rel)[:-1] if p] + ([rel.rstrip("/").split("/")[-1]] if info.is_dir() else []):
+            c = norm_closure(part)
+            if c and c not in folders:
+                folders.append(c)
         if info.is_dir():
             continue
-        rel = info.filename
         base = os.path.basename(rel)
-        if base.startswith(".") or "__MACOSX" in rel:
+        if base.startswith("."):
             continue
         low = base.lower()
-        if low.endswith(".kmz") or low.endswith(".kml"):
+        if low.endswith((".kmz", ".kml")):
             kmz_pts = parse_kmz(z.read(info))
+            continue
+        if low.endswith(".sor"):
+            sors.append((base, z.read(info)))
             continue
         if not low.endswith(IMG_EXT):
             continue
@@ -258,26 +299,31 @@ def run_import(zip_bytes, job_dir, s1, s2, sort_key=None):
             continue
         os.remove(src)
         group, sub = classify_path(rel, s1, s2)
-        photos.append({"id": pid, "rel": rel, "name": base, "group": group, "sub": sub,
+        photos.append({"id": pid, "rel": rel, "name": base, "group": group, "sub": sub, "kind": None,
                        "path": big, "thumb": th, "w": size[0], "h": size[1], "exif_time": exif_time,
                        "feat": features(big), "lat": None, "lon": None})
     try:
         os.rmdir(tmp_dir)
     except OSError:
         pass
+    photos.sort(key=photo_time_key)
+    return photos, kmz_pts, sors, folders
 
-    # OCR พิกัด เฉพาะรูปที่ไม่รู้กลุ่ม (เร็วกว่า) -> หาจุดที่ใกล้สุดใน KMZ
+
+def place_unknown(photos, kmz_pts, s1, s2):
+    """รูปที่ไม่ได้อยู่ในโฟลเดอร์ที่รู้จัก: อ่านพิกัดบนรูป แล้วหาจุดใกล้สุดใน KMZ"""
     site_pts = {}
     for name, lat, lon in kmz_pts:
-        if site_code(s1).lower() in name.lower().replace("_", ""):
+        n = name.lower().replace("_", "")
+        if site_code(s1).lower() in n:
             site_pts[1] = (lat, lon)
-        elif site_code(s2).lower() in name.lower().replace("_", ""):
+        elif site_code(s2).lower() in n:
             site_pts[2] = (lat, lon)
     closure_pts = [(norm_closure(n), (la, lo)) for n, la, lo in kmz_pts if norm_closure(n)]
     for p in photos:
         if p["group"] != "unknown":
             continue
-        ll = ocr_latlon(p["path"])
+        ll = (p["lat"], p["lon"]) if p.get("lat") else ocr_latlon(p["path"])
         if not ll:
             continue
         p["lat"], p["lon"] = ll
@@ -288,74 +334,156 @@ def run_import(zip_bytes, job_dir, s1, s2, sort_key=None):
             if d < 80:
                 p["group"], p["sub"], p["gps_dist"] = g, sub, round(d)
 
-    photos.sort(key=sort_key or photo_time_key)
 
-    closures_detected = [c for c, _ in closure_pts]
-    for p in photos:
-        if p["group"] == "closure" and p["sub"] not in closures_detected:
-            closures_detected.append(p["sub"])
-
+def auto_assign(photos, closures):
+    """วางรูปเข้าช่องตามกฎที่เรียนรู้จาก PAT ตัวอย่าง
+    - ถ้ามีผล AI (p['kind']) ใช้ประเภทรูปจาก AI
+    - ถ้าไม่มี ใช้การวิเคราะห์สี/ลำดับเวลา (แม่นน้อยกว่า -> ขึ้นให้คนตรวจ)"""
     assign, conf, method = {}, {}, {}
+    ai = any(p.get("kind") for p in photos)
 
     def put(slot, p, c, how):
-        if slot not in assign and p is not None:
-            assign[slot] = p["id"]
-            conf[slot] = c
-            method[slot] = how
-            p.setdefault("used", 0)
-            p["used"] += 1
+        if slot in assign or p is None:
+            return
+        assign[slot] = p["id"] if p != "NA" else "NA"
+        conf[slot] = c
+        method[slot] = how
 
-    by = lambda g, s=None: [p for p in photos if p["group"] == g and (s is None or p["sub"] == s)]
+    def by(g, s=None):
+        return [p for p in photos if p["group"] == g and (s is None or p["sub"] == s) and p.get("kind") not in ("sign", "sfp", "other")]
 
-    # หัวต่อ
-    for cl in closures_detected:
+    def pick(ps, kind, used=()):
+        """เลือกรูปแรก (ตามเวลา) ที่ AI บอกว่าเป็นประเภทนี้"""
+        c = [p for p in ps if p.get("kind") == kind and p["id"] not in used]
+        if not c:
+            return None, 0
+        best = max(c, key=lambda p: float(p.get("kconf") or 0.8)) if kind == "site_location" else c[0]
+        return best, float(best.get("kconf") or 0.85)
+
+    # ---- หัวต่อ
+    for cl in closures:
         ps = by("closure", cl)
-        roles = assign_closure_roles(ps)
-        how = "gps" if any(p.get("gps_dist") is not None for p in ps) else "folder"
-        for idx, (role, c) in roles.items():
-            put(f"closure:{cl}:{role}", ps[idx], c, how)
+        if ai and any(p.get("kind") for p in ps):
+            used = set()
+            for role, kind in (("front", "closure_front"), ("inside", "closure_inside"), ("pole", "closure_install")):
+                p, c = pick(ps, kind, used)
+                if p:
+                    used.add(p["id"])
+                    put(f"closure:{cl}:{role}", p, c, "ai")
+        if not all(f"closure:{cl}:{r}" in assign for r in ("front", "inside", "pole")):
+            free = [p for p in ps if p["id"] not in assign.values()]
+            roles = assign_closure_roles(free)
+            for idx, (role, c) in roles.items():
+                put(f"closure:{cl}:{role}", free[idx], c, "folder")
 
-    # Site รอบ 1 / รอบ 2 : เรียงตามเวลา, รูปที่ท้องฟ้าเยอะสุดในชุด = Location
+    # ---- Site รอบที่ 1 (จากโฟลเดอร์ Site)
     for k in (1, 2):
         ps = by("site", k)
-        rounds = [ps[0:3], ps[3:6]]
-        for r, chunk in enumerate(rounds, 1):
-            if not chunk:
-                continue
-            chunk = list(chunk)
-            loc = max(chunk, key=lambda p: p["feat"]["sky"])
-            put(f"site{k}:r{r}:location", loc, 0.85, "folder")
-            rest = [p for p in chunk if p is not loc]
-            if rest:
-                put(f"site{k}:r{r}:odf", rest[0], 0.7, "folder")
-            if len(rest) > 1:
-                put(f"site{k}:r{r}:core", rest[1], 0.7, "folder")
+        if ai:
+            used = set()
+            for role, kind in (("location", "site_location"), ("odf", "odf_rack"), ("core", "core_label")):
+                p, c = pick(ps, kind, used)
+                if p:
+                    used.add(p["id"])
+                    put(f"site{k}:r1:{role}", p, c, "ai")
+        if ps and f"site{k}:r1:location" not in assign:
+            loc = max(ps[:6], key=lambda p: p["feat"]["sky"])
+            put(f"site{k}:r1:location", loc, 0.8 if loc["feat"]["sky"] > .3 else .5, "folder")
+        rest = [p for p in ps if p["id"] not in assign.values()]
+        for role, p in zip(("odf", "core"), rest):
+            put(f"site{k}:r1:{role}", p, 0.55, "folder")
 
-    # Power
-    for i, p in enumerate(by("power")[:3], 1):
-        put(f"power:{i}", p, 0.9, "folder")
-
-    # Plug port
+    # ---- Plug Port (และ Site รอบที่ 2 = รูปชุดเดียวกับ Plug Port ตามตัวอย่าง)
     for k in (1, 2):
         ps = by("plug", k)
-        if not ps:
-            continue
-        loc = max(ps, key=lambda p: p["feat"]["sky"])
-        put(f"plug{k}:location", loc, 0.7 if loc["feat"]["sky"] > 0.3 else 0.5, "folder")
-        rest = [p for p in ps if p is not loc]
-        for slot, p in zip([f"plug{k}:port1", f"plug{k}:port2", f"plug{k}:odf1", f"plug{k}:odf2"], rest):
-            put(slot, p, 0.6, "folder")
+        if ai:
+            used = set()
+            for role, kind in (("location", "site_location"), ("port1", "equipment_port"), ("port2", "equipment_port"),
+                               ("odf1", "odf_rack"), ("odf2", "core_label")):
+                p, c = pick(ps, kind, used)
+                if p:
+                    used.add(p["id"])
+                    put(f"plug{k}:{role}", p, c, "ai")
+        elif ps:
+            loc = max(ps, key=lambda p: p["feat"]["sky"])
+            if loc["feat"]["sky"] > .3:
+                put(f"plug{k}:location", loc, 0.7, "folder")
+            rest = [p for p in ps if p["id"] not in assign.values()]
+            for slot, p in zip(("port1", "port2", "odf1", "odf2"), rest):
+                put(f"plug{k}:{slot}", p, 0.5, "folder")
+        # ไม่มีรูป Location ในโฟลเดอร์ Plug Port -> ใช้รูป Location ของ Site รอบที่ 1 (ตามตัวอย่าง)
+        if f"plug{k}:location" not in assign and f"site{k}:r1:location" in assign:
+            assign[f"plug{k}:location"] = assign[f"site{k}:r1:location"]
+            conf[f"plug{k}:location"], method[f"plug{k}:location"] = conf[f"site{k}:r1:location"], "rule"
+        put(f"plug{k}:odf3", "NA", 1.0, "rule")
+        for src, dst in (("location", "location"), ("odf1", "odf"), ("odf2", "core")):
+            s_ = f"plug{k}:{src}"
+            if s_ in assign and f"site{k}:r2:{dst}" not in assign:
+                assign[f"site{k}:r2:{dst}"] = assign[s_]
+                conf[f"site{k}:r2:{dst}"], method[f"site{k}:r2:{dst}"] = conf[s_], "rule"
+
+    # ---- Power: รูปเครื่องวัด 2 รูป ช่องที่ 3 = N/A
+    pw = by("power")
+    if not ai:
+        for p in pw:
+            p.setdefault("kind", None)
+            if p["kind"] is None:
+                p["kind"] = guess_screen(p["path"])
+    pw = [p for p in pw if p.get("kind") in (None, "power_meter")]
+    for i, p in enumerate(pw[:2], 1):
+        put(f"power:{i}", p, 0.9 if ai else 0.7, "ai" if ai else "folder")
+    put("power:3", "NA", 1.0, "rule")
 
     d = by("design")
     if d:
         put("design", d[0], 1.0, "folder")
-    pw = by("planwork")
-    if pw:
-        put("planwork", pw[-1], 0.8, "folder")
+    pl = by("planwork")
+    if pl:
+        put("planwork", pl[-1], 0.8, "folder")
+    return assign, conf, method
 
-    review = sorted(s for s, c in conf.items() if c < REVIEW_BELOW)
+
+def guess_screen(path):
+    """แยกรูปหน้าจอ Power Meter กับหน้าจอ OTDR ด้วย OCR (ใช้ตอนไม่มี AI)"""
+    if pytesseract is None:
+        return None
+    try:
+        im = Image.open(path).convert("L")
+        t = pytesseract.image_to_string(im, lang="eng").upper()
+    except Exception:
+        return None
+    if "POWER METER" in t or "DBM" in t:
+        return "power_meter"
+    if any(k in t for k in ("CUMUL", "ATT.", "FILE NAME", "EVENT", "TRACE", "FIBER LEN")):
+        return "otdr_screen"
+    return None
+
+
+def fiber_length_from_images(photos):
+    """อ่าน 'Fiber Lenght: x.xxx km' จากรูปในโฟลเดอร์ OTDR (OCR)"""
+    if pytesseract is None:
+        return None
+    for p in photos:
+        if p["group"] != "otdr" and p.get("kind") != "otdr_screen":
+            continue
+        try:
+            t = pytesseract.image_to_string(Image.open(p["path"]).convert("L"), lang="eng")
+        except Exception:
+            continue
+        m = re.search(r"Fiber\s*Len\w*\s*[:=]?\s*([\d.,]+)\s*km", t, re.I)
+        if m:
+            return float(m.group(1).replace(",", "."))
+    return None
+
+
+def run_import(zip_bytes, job_dir, s1, s2):
+    photos, kmz_pts, sors, folders = extract_zip(zip_bytes, job_dir, s1, s2)
+    place_unknown(photos, kmz_pts, s1, s2)
+    closures = [norm_closure(n) for n, _, _ in kmz_pts if norm_closure(n)]
+    for c in folders:
+        if c not in closures:
+            closures.append(c)
     for p in photos:
         if p["feat"]["sharp"] < 300:
             p["blurry"] = True
-    return {"photos": photos, "kmz": kmz_pts, "closures": closures_detected,
-            "assign": assign, "conf": conf, "method": method, "review": review}
+    return {"photos": photos, "kmz": kmz_pts, "closures": closures, "closure_folders": folders, "sors": sors}

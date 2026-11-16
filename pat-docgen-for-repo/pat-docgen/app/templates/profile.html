@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}โปรไฟล์ – PAT DocGen{% endblock %}
+{% block main %}
+<h1>โปรไฟล์ของฉัน</h1>
+<form method="post" enctype="multipart/form-data" class="card" style="max-width:720px">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <div class="grid g2">
+    <div><label>ชื่อ</label><div>{{ current_user.name }}</div></div>
+    <div><label>อีเมล</label><div>{{ current_user.email }}</div></div>
+    <div><label for="pos">ตำแหน่ง (ใช้ในช่อง ผู้ส่งเอกสาร)</label><input id="pos" type="text" name="position" value="{{ current_user.position or '' }}"></div>
+  </div>
+  <h2 style="margin-top:16px">ลายเซ็นของฉัน</h2>
+  <div class="row">
+    {% if current_user.signature_path %}<img src="{{ url_for('main.profile_sig') }}" alt="ลายเซ็นของฉัน" style="height:60px;border:1px dashed #D1D5DB;border-radius:8px;padding:4px;background:#fff">{% else %}<span class="sub">ยังไม่มีลายเซ็น</span>{% endif %}
+    <label class="btn" for="sg" style="margin:0">อัปโหลดลายเซ็น (PNG/JPG)</label><input class="vh" id="sg" type="file" name="signature" accept=".png,.jpg,.jpeg">
+  </div>
+  <div class="sub" style="margin-top:6px">เซ็นบนกระดาษขาวแล้วถ่ายรูปได้เลย ระบบจะลบพื้นขาวและตัดขอบให้</div>
+  <h2 style="margin-top:16px">เปลี่ยนรหัสผ่าน</h2>
+  <div class="grid g2">
+    <div><label for="op">รหัสเดิม</label><input id="op" type="password" name="old_password"></div>
+    <div><label for="np">รหัสใหม่ (อย่างน้อย 8 ตัว)</label><input id="np" type="password" name="new_password"></div>
+  </div>
+  <div style="margin-top:14px"><button class="btn pri" type="submit">บันทึก</button></div>
+</form>
+{% endblock %}

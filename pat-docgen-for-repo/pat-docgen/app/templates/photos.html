@@ -8,16 +8,18 @@
     <span>รูปทั้งหมด <b>{{ photos|length }}</b></span>
     <span>ใส่ในช่องแล้ว <b id="pf">{{ prog.filled }}</b>/{{ prog.total }}</span>
     <span style="color:#92400E">ระบบไม่มั่นใจ <b id="pr">{{ prog.review }}</b> ช่อง (กรอบส้ม)</span>
-    <span class="tag m-folder">โฟลเดอร์</span><span class="tag m-gps">พิกัด/KMZ</span><span class="tag m-manual">เลือกเอง</span>
+    <span class="tag m-ai">AI</span><span class="tag m-folder">โฟลเดอร์</span><span class="tag m-gps">พิกัด/KMZ</span><span class="tag m-rule">ตามตัวอย่าง</span><span class="tag m-manual">เลือกเอง</span>
+    {% if not ai %}<span class="sub">(ยังไม่ได้เปิด AI — ใส่ ANTHROPIC_API_KEY ใน Railway เพื่อให้จัดหน้า Site/Plug Port ได้แม่นขึ้น)</span>{% endif %}
   </div>
   <div class="row">
     <label class="row sub" style="font-weight:400;margin:0"><input type="checkbox" id="onlyrv"> แสดงเฉพาะที่ต้องตรวจ</label>
     {% if can and prog.review %}<form method="post" action="{{ url_for('main.job_confirm_all', job_id=job.id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn ok" type="submit">ยืนยันทั้งหมดตามที่ระบบเลือก</button></form>{% endif %}
+    {% if can %}<form method="post" action="{{ url_for('main.job_teach', job_id=job.id) }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn" type="submit" title="ใช้การจัดรูปของงานนี้เป็นตัวอย่างให้ AI ในงานถัดไป">สอน AI จากงานนี้</button></form>{% endif %}
     <a class="btn pri" href="{{ url_for('main.job_view', job_id=job.id) }}#docs">ไปสร้าง PDF →</a>
   </div>
 </div>
 {% if not photos %}<div class="card">ยังไม่มีรูป — <a href="{{ url_for('main.job_view', job_id=job.id) }}#import">Import ZIP</a></div>{% endif %}
-<div class="sub" style="margin:0 0 10px">คลิกช่องเพื่อเลือก/เปลี่ยนรูป · ตัวเลขหน้าเป็นลำดับหน้าใน PAT</div>
+<div class="sub" style="margin:0 0 10px">คลิกช่องเพื่อเลือก/เปลี่ยนรูป · <b>ลากรูปจากช่องหนึ่งไปวางอีกช่องเพื่อย้าย</b> (ถ้าช่องปลายทางมีรูป จะสลับกัน) · ตัวเลขหน้าเป็นลำดับหน้าใน PAT</div>
 {% for p in pages %}
   {% if p.slots %}
   {% set has_rv = p.slots|selectattr('key','in',review)|list %}
@@ -27,7 +29,7 @@
     {% for s in p.slots %}
       {% set pid = assign.get(s.key) %}
       {% set m = method.get(s.key,'') %}
-      <button type="button" class="slot{{ ' rv' if s.key in review and pid }}" data-slot="{{ s.key }}" data-pref="{{ prefs.get(s.key,'') }}" data-cap="{{ p.title }} · {{ s.caption or 'ช่องว่าง (N/A)' }}" {{ 'disabled' if not can }}>
+      <button type="button" class="slot{{ ' rv' if s.key in review and pid }}" {{ 'draggable=true' if can and pid }} data-slot="{{ s.key }}" data-pref="{{ prefs.get(s.key,'') }}" data-cap="{{ p.title }} · {{ s.caption or 'ช่องว่าง (N/A)' }}" {{ 'disabled' if not can }}>
         {% if pid == 'NA' %}<div class="im na">N/A</div>
         {% elif pid %}<div class="im"><img loading="lazy" src="{{ url_for('main.photo_file', pid=pid, size='t') }}" alt="{{ s.caption }}"></div>
         {% elif not s.caption %}<div class="im na">N/A</div>
@@ -36,6 +38,8 @@
           {% if pid and pid != 'NA' %}<span>
             {% if s.key in review %}<span class="tag m-low">ระบบไม่มั่นใจ {{ (conf.get(s.key,0)*100)|int }}%</span>
             {% elif m=='manual' %}<span class="tag m-manual">เลือกเอง</span>
+            {% elif m=='ai' %}<span class="tag m-ai">AI {{ (conf.get(s.key,0)*100)|int }}%</span>
+            {% elif m=='rule' %}<span class="tag m-rule">ตามตัวอย่าง</span>
             {% elif m=='gps' %}<span class="tag m-gps">พิกัด/KMZ {{ (conf.get(s.key,0)*100)|int }}%</span>
             {% else %}<span class="tag m-folder">โฟลเดอร์ {{ (conf.get(s.key,0)*100)|int }}%</span>{% endif %}
           </span>{% endif %}
@@ -84,16 +88,24 @@ modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('o
 document.addEventListener('keydown',e=>{if(e.key==='Escape')modal.classList.remove('open')});
 modal.querySelectorAll('[data-pick]').forEach(btn=>btn.addEventListener('click',async()=>{
   const fd=new FormData(); fd.append('slot',cur.dataset.slot); fd.append('photo',btn.dataset.pick); fd.append('_csrf',csrf);
-  const r=await fetch(url,{method:'POST',body:fd}); const j=await r.json();
+  const r=await fetch(url,{method:'POST',body:fd}); const j=await r.json().catch(()=>({}));
   if(!j.ok){alert('บันทึกไม่สำเร็จ');return}
-  const im=cur.querySelector('.im'); const pid=btn.dataset.pick;
-  if(pid==='NA'){im.className='im na';im.innerHTML='N/A'}
-  else if(pid===''){im.className='im miss';im.innerHTML='ยังไม่มีรูป — คลิกเพื่อเลือก'}
-  else{im.className='im';im.innerHTML='<img src="'+btn.querySelector('img').src+'" alt="">';btn.classList.add('u')}
-  cur.classList.remove('rv'); const t=cur.querySelector('.cp span'); if(t) t.innerHTML='<span class="tag m-manual">เลือกเอง</span>';
-  document.getElementById('pf').textContent=j.prog.filled; document.getElementById('pr').textContent=j.prog.review;
-  modal.classList.remove('open');
+  reloadKeepScroll();
 }));
+function reloadKeepScroll(){ sessionStorage.setItem('pscroll', String(window.scrollY)); location.reload(); }
+const sp=sessionStorage.getItem('pscroll'); if(sp){ sessionStorage.removeItem('pscroll'); window.scrollTo(0, parseInt(sp,10)); }
+// ลากรูปจากช่องหนึ่งไปอีกช่อง
+let dragFrom=null;
+document.querySelectorAll('.slot').forEach(b=>{
+  b.addEventListener('dragstart',e=>{dragFrom=b.dataset.slot; e.dataTransfer.effectAllowed='move'; b.style.opacity=.5});
+  b.addEventListener('dragend',()=>{b.style.opacity=''; document.querySelectorAll('.slot').forEach(x=>x.classList.remove('dropok'))});
+  b.addEventListener('dragover',e=>{ if(dragFrom && dragFrom!==b.dataset.slot){e.preventDefault(); b.classList.add('dropok')} });
+  b.addEventListener('dragleave',()=>b.classList.remove('dropok'));
+  b.addEventListener('drop',async e=>{ e.preventDefault(); b.classList.remove('dropok'); if(!dragFrom||dragFrom===b.dataset.slot) return;
+    const fd=new FormData(); fd.append('from',dragFrom); fd.append('to',b.dataset.slot); fd.append('_csrf',csrf);
+    const r=await fetch("{{ url_for('main.job_swap', job_id=job.id) }}",{method:'POST',body:fd}); const j=await r.json().catch(()=>({}));
+    dragFrom=null; if(!j.ok){alert('ย้ายไม่สำเร็จ');return} reloadKeepScroll(); });
+});
 document.getElementById('onlyrv').addEventListener('change',e=>{
   document.querySelectorAll('section.pg').forEach(s=>{s.style.display=(e.target.checked&&!s.querySelector('.slot.rv'))?'none':''})
 });

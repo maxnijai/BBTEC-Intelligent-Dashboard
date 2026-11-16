@@ -20,6 +20,11 @@ DEFAULT_FIELDS = {
     "sap_no": "",
     "company_display": "",
     "company_address": "",
+    "ofc": "",
+    "core": "",
+    "or_no": "",
+    "inspect_project": "Support Single Grid Project",
+    "def_region": "",
     "equip1": "CX600",
     "equip2": "CPE",
     "power_core1": "",
@@ -29,11 +34,11 @@ DEFAULT_FIELDS = {
     "lb_aF": "0.20",
     "lb_NE": "",
     "lb_aE": "0.15",
-    "lb_NC": "1",
+    "lb_NC": "2",
     "lb_aC": "0.50",
-    "lb_otdr_max": "",
-    "lb_otdr_min": "",
     "lb_wavelength": "1550",
+    "lb_otdr_max": "4.60",   # ค่า Fix ตามลูกค้า
+    "lb_otdr_min": "4.44",   # ค่า Fix ตามลูกค้า
     # ช่วงหน้าที่จะดึงจาก PDF ที่ export จาก Google Sheet (หน้า Check list / Loss / Material / Balance)
     "sheet_pages": "",
     "closures": "",   # "SJ#01,SJ#02,..." ว่าง = อ่านจาก KMZ / โฟลเดอร์
@@ -66,7 +71,9 @@ def build_pages(link_name, fields, closures):
     s1, s2 = sites_from_link(link_name)
     e1, e2 = fields.get("equip1") or "CX600", fields.get("equip2") or "CPE"
     pages = [{"kind": "cover", "title": "ปก PAT", "slots": []},
-             {"kind": "sheet", "title": "หน้าฟอร์มจาก Google Sheet (Check list, Comment, Loss, Material, Balance)", "slots": []}]
+             {"kind": "checklist", "title": "รายการเอกสารส่งงานติดตั้ง Optical Fiber Cable", "slots": []},
+             {"kind": "inspection", "title": "สรุปผลการตรวจรับการติดตั้ง OPTICAL FIBER CABLE", "slots": []},
+             {"kind": "sheet", "title": "หน้าจาก Google Sheet (Loss OTDR, ใบสรุปเคเบิลรื้อถอน, Balance Cable & Material)", "slots": []}]
     for rnd in (1, 2):
         for idx, site in ((1, s1), (2, s2)):
             pages.append({
@@ -99,11 +106,15 @@ def build_pages(link_name, fields, closures):
     pages.append({"kind": "deficiency", "title": "Deficiency List", "slots": []})
     pages.append({"kind": "single", "title": "Topo Design", "slots": [{"key": "design", "caption": ""}]})
     pages.append({"kind": "single", "title": "Support Planwork", "slots": [{"key": "planwork", "caption": ""}]})
+    pages.append({"kind": "otdr", "title": "Report OTDR (จากไฟล์ .sor)", "slots": []})
     return pages
 
 
 def all_slot_keys(pages):
     return [s["key"] for p in pages for s in p["slots"]]
+
+
+OTDR_MAX, OTDR_MIN = 4.60, 4.44  # ค่า Fix ตามลูกค้า (แก้ในหน้างานได้ถ้าจำเป็น)
 
 
 def link_budget(fields):
@@ -114,7 +125,8 @@ def link_budget(fields):
             return None
     L, aF, NE, aE, NC, aC = (f(k) for k in ("lb_L", "lb_aF", "lb_NE", "lb_aE", "lb_NC", "lb_aC"))
     out = {"L": L, "aF": aF, "NE": NE, "aE": aE, "NC": NC, "aC": aC,
-           "otdr_max": f("lb_otdr_max"), "otdr_min": f("lb_otdr_min")}
+           "otdr_max": f("lb_otdr_max") if f("lb_otdr_max") is not None else OTDR_MAX,
+           "otdr_min": f("lb_otdr_min") if f("lb_otdr_min") is not None else OTDR_MIN}
     if None in (L, aF, NE, aE, NC, aC):
         out.update(cable=None, splice=None, conn=None, total=None)
         return out

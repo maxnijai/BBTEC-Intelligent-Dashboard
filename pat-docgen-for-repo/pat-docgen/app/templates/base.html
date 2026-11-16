@@ -21,6 +21,7 @@
     <a href="{{ url_for('main.users') }}" class="{{ 'on' if ep=='main.users' }}">ผู้ใช้งาน</a>
     <a href="{{ url_for('main.companies') }}" class="{{ 'on' if ep=='main.companies' }}">{{ 'บริษัท' if current_user.is_super else 'ข้อมูลบริษัท / โลโก้' }}</a>
     {% endif %}
+    <a href="{{ url_for('main.profile') }}" class="{{ 'on' if ep=='main.profile' }}">โปรไฟล์ / ลายเซ็นของฉัน</a>
     <div class="who"><b>{{ current_user.name }}</b><br>{{ current_user.company.name if current_user.company else 'BBTEC (ทุกบริษัท)' }}<br>{{ current_user.role }}
       <form method="post" action="{{ url_for('main.logout') }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="lo" type="submit">ออกจากระบบ</button></form>
     </div>
@@ -32,7 +33,28 @@
 </div>
 <div class="busy" id="busy">กำลังประมวลผล… อย่าปิดหน้านี้</div>
 <script>
-document.querySelectorAll('form[data-busy]').forEach(f=>f.addEventListener('submit',()=>document.getElementById('busy').classList.add('on')));
+// ฟอร์มที่มีไฟล์: อัปโหลดแบบมีแถบความคืบหน้า แล้วแสดงหน้าผลลัพธ์
+const busy=document.getElementById('busy');
+const mb=n=>(n/1048576).toFixed(1);
+document.querySelectorAll('form[data-busy]').forEach(f=>f.addEventListener('submit',ev=>{
+  busy.classList.add('on');
+  const hasFile=[...f.querySelectorAll('input[type=file]')].some(i=>i.files&&i.files.length);
+  if(!hasFile||!window.FormData) return;          // ไม่มีไฟล์ -> ส่งแบบปกติ
+  ev.preventDefault();
+  const fd=new FormData(f);
+  if(ev.submitter&&ev.submitter.name) fd.append(ev.submitter.name, ev.submitter.value);
+  const x=new XMLHttpRequest(); const t0=Date.now();
+  x.open('POST', f.action||location.href);
+  x.upload.onprogress=e=>{ if(!e.lengthComputable) return;
+    const pct=Math.round(e.loaded/e.total*100), sec=(Date.now()-t0)/1000, spd=e.loaded/Math.max(sec,0.5);
+    const left=Math.max(0,Math.round((e.total-e.loaded)/spd));
+    busy.textContent=pct<100?`กำลังอัปโหลด ${pct}% (${mb(e.loaded)} / ${mb(e.total)} MB) · เหลือประมาณ ${left} วินาที`
+                            :'อัปโหลดเสร็จ — กำลังจัดรูปเข้าช่อง และอ่าน KMZ…'; };
+  x.onload=()=>{ document.open(); document.write(x.responseText); document.close();
+                 if(x.responseURL) history.replaceState(null,'',x.responseURL); };
+  x.onerror=()=>{ busy.classList.remove('on'); alert('อัปโหลดไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่'); };
+  x.send(fd);
+}));
 </script>
 {% block scripts %}{% endblock %}
 </body>
