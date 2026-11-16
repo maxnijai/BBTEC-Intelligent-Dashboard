@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}PAT DocGen{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<meta name="csrf" content="{{ csrf }}">
+</head>
+<body>
+<div class="shell">
+  <nav class="side" aria-label="เมนูหลัก">
+    <div class="brand"><i></i>PAT DocGen</div>
+    {% set ep = request.endpoint %}
+    <a href="{{ url_for('main.dashboard') }}" class="{{ 'on' if ep=='main.dashboard' }}">งานทั้งหมด</a>
+    {% if current_user.can_edit() %}<a href="{{ url_for('main.job_new') }}" class="{{ 'on' if ep=='main.job_new' }}">+ สร้างงานใหม่</a>{% endif %}
+    {% block navjob %}{% endblock %}
+    <div class="sep"></div>
+    <a href="{{ url_for('main.audit') }}" class="{{ 'on' if ep=='main.audit' }}">Audit log</a>
+    {% if current_user.role in ('superadmin','admin') %}
+    <a href="{{ url_for('main.users') }}" class="{{ 'on' if ep=='main.users' }}">ผู้ใช้งาน</a>
+    <a href="{{ url_for('main.companies') }}" class="{{ 'on' if ep=='main.companies' }}">{{ 'บริษัท' if current_user.is_super else 'ข้อมูลบริษัท / โลโก้' }}</a>
+    {% endif %}
+    <div class="who"><b>{{ current_user.name }}</b><br>{{ current_user.company.name if current_user.company else 'BBTEC (ทุกบริษัท)' }}<br>{{ current_user.role }}
+      <form method="post" action="{{ url_for('main.logout') }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="lo" type="submit">ออกจากระบบ</button></form>
+    </div>
+  </nav>
+  <main>
+    {% with msgs = get_flashed_messages(with_categories=true) %}{% for c, m in msgs %}<div class="flash {{ c }}">{{ m }}</div>{% endfor %}{% endwith %}
+    {% block main %}{% endblock %}
+  </main>
+</div>
+<div class="busy" id="busy">กำลังประมวลผล… อย่าปิดหน้านี้</div>
+<script>
+document.querySelectorAll('form[data-busy]').forEach(f=>f.addEventListener('submit',()=>document.getElementById('busy').classList.add('on')));
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

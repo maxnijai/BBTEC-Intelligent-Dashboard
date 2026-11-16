@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}ผู้ใช้งาน – PAT DocGen{% endblock %}
+{% block main %}
+<h1>ผู้ใช้งาน</h1>
+<div class="card" style="padding:0;overflow:hidden"><div class="scroll">
+<table class="t" style="min-width:820px">
+  <thead><tr><th>ชื่อ</th><th>อีเมล</th><th>บริษัท</th><th>สิทธิ์</th><th>เข้าใช้ล่าสุด</th><th>สถานะ</th><th></th></tr></thead>
+  <tbody>
+  {% for u in users %}
+  <tr>
+    <td>{{ u.name }}</td><td>{{ u.email }}</td><td>{{ u.company.name if u.company else 'ทุกบริษัท' }}</td><td>{{ ROLES.get(u.role) }}</td>
+    <td class="sub">{{ u.last_login|th if u.last_login else '-' }}</td>
+    <td>{{ 'ใช้งาน' if u.active else 'ปิด' }}</td>
+    <td><form method="post" class="row" style="gap:6px"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="uid" value="{{ u.id }}">
+      {% if u.id != current_user.id %}<button class="btn sm" name="act" value="toggle">{{ 'ปิดใช้งาน' if u.active else 'เปิดใช้งาน' }}</button>{% endif %}
+      <label class="vh" for="pw{{ u.id }}">รหัสใหม่</label><input id="pw{{ u.id }}" type="text" name="password" placeholder="รหัสใหม่" style="width:120px;height:32px">
+      <button class="btn sm" name="act" value="reset">ตั้งรหัส</button></form></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table></div></div>
+<form method="post" class="card" style="max-width:900px">
+  <input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="act" value="add">
+  <h2>เพิ่มผู้ใช้</h2>
+  <div class="grid g3">
+    <div><label for="n">ชื่อ</label><input id="n" type="text" name="name" required></div>
+    <div><label for="e">อีเมล</label><input id="e" type="email" name="email" required></div>
+    <div><label for="p">รหัสผ่านเริ่มต้น</label><input id="p" type="text" name="password" required minlength="6"></div>
+    <div><label for="r">สิทธิ์</label><select id="r" name="role">{% for k, v in ROLES.items() %}{% if k != 'superadmin' or current_user.is_super %}<option value="{{ k }}" {{ 'selected' if k=='editor' }}>{{ v }}</option>{% endif %}{% endfor %}</select></div>
+    {% if companies %}<div><label for="c">บริษัท</label><select id="c" name="company_id"><option value="">—</option>{% for c in companies %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></div>{% endif %}
+  </div>
+  <div style="margin-top:12px"><button class="btn pri" type="submit">เพิ่มผู้ใช้</button></div>
+</form>
+{% endblock %}

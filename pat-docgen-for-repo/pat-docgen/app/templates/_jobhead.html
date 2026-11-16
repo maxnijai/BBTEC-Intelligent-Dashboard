@@ -1,0 +1,14 @@
+<div class="row between">
+  <div>
+    <div class="sub">{{ job.company.name }} · สร้างโดย {{ job.creator.name if job.creator }} · แก้ล่าสุด {{ job.updater.name if job.updater }} {{ job.updated_at|th }}</div>
+    <h1>{{ job.link_name }}</h1>
+  </div>
+  <div class="row"><span class="pill {{ STATUS[job.status][1] }}" style="font-size:14px">{{ STATUS[job.status][0] }}</span>
+    <span class="sub">รูป {{ prog.filled }}/{{ prog.total }} ช่อง{% if prog.review %} · รอตรวจ {{ prog.review }}{% endif %}</span></div>
+</div>
+{% if job.status == 'rejected' and job.reject_comment %}<div class="flash error" style="margin-top:10px">ถูกตีกลับ: {{ job.reject_comment }}</div>{% endif %}
+<div class="tabs">
+  <a href="{{ url_for('main.job_view', job_id=job.id) }}" class="{{ 'on' if request.endpoint=='main.job_view' }}">1 · ข้อมูล &amp; ไฟล์</a>
+  <a href="{{ url_for('main.job_photos', job_id=job.id) }}" class="{{ 'on' if request.endpoint=='main.job_photos' }}">2 · จัดรูป ({{ prog.filled }}/{{ prog.total }})</a>
+  <a href="{{ url_for('main.job_view', job_id=job.id) }}#docs">3 · สร้าง PDF &amp; ส่งตรวจ</a>
+</div>
