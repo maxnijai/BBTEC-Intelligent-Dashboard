@@ -120,6 +120,18 @@ def features(path):
     return {"sky": sky, "white": white, "gray": gray, "sharp": sharp}
 
 
+def dhash(path):
+    """ลายนิ้วมือรูป 64 บิต (ใช้จำรูปที่คนเคยจัดไว้: รูปเดิม Import ซ้ำจะได้ค่าเดิม)"""
+    im = Image.open(path).convert("L").resize((9, 8), Image.LANCZOS)
+    a = np.asarray(im).astype(int)
+    bits = (a[:, 1:] > a[:, :-1]).flatten()
+    return "%016x" % int("".join("1" if b else "0" for b in bits), 2)
+
+
+def hamming(h1, h2):
+    return bin(int(h1, 16) ^ int(h2, 16)).count("1")
+
+
 GPS_RX = re.compile(r"\+?\s*(1[0-9])[.,](\d{4,})\D{0,4}?\+?\s*(\d{3})[.,](\d{4,})")
 
 

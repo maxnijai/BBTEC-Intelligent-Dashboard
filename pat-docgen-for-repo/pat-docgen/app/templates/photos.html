@@ -8,7 +8,7 @@
     <span>รูปทั้งหมด <b>{{ photos|length }}</b></span>
     <span>ใส่ในช่องแล้ว <b id="pf">{{ prog.filled }}</b>/{{ prog.total }}</span>
     <span style="color:#92400E">ระบบไม่มั่นใจ <b id="pr">{{ prog.review }}</b> ช่อง (กรอบส้ม)</span>
-    <span class="tag m-ai">AI</span><span class="tag m-folder">โฟลเดอร์</span><span class="tag m-gps">พิกัด/KMZ</span><span class="tag m-rule">ตามตัวอย่าง</span><span class="tag m-manual">เลือกเอง</span>
+    <span class="tag m-mem">จำจากที่สอน</span><span class="tag m-ai">AI</span><span class="tag m-folder">โฟลเดอร์</span><span class="tag m-gps">พิกัด/KMZ</span><span class="tag m-rule">ตามตัวอย่าง</span><span class="tag m-manual">เลือกเอง</span>
 
   </div>
   <div class="row">
@@ -27,10 +27,11 @@
       {% elif not ai_info %}เปิดแล้ว แต่งานนี้ยังไม่เคยให้ AI ดูรูป (Import ไว้ก่อนเปิด AI) — กด “ให้ AI จัดรูปใหม่”
       {% else %}ดูรูปล่าสุด {{ ai_info.at.replace('T',' ') }} UTC · จัดประเภทได้ {{ ai_info.n }}/{{ ai_info.total }} รูป · {{ '{:,}'.format(ai_info.tokens) }} tokens ≈ ${{ ai_info.usd }}
         {% if ai_info.errors %}<br><span style="color:#B91C1C;font-weight:700">ผิดพลาด: {{ ai_info.errors|join(' / ') }}</span>{% endif %}{% endif %}
+      <br><span class="sub">ช่องที่ระบบจำไว้จากการสอน: {{ n_memory }} ช่อง (รูปเดิมจะเข้าช่องเดิมทันที ไม่ใช้ AI)</span>
       <br><span class="sub">รูปตัวอย่างที่สอนแล้วของบริษัทนี้: {{ n_examples }} รูป (ใช้เทียบเมื่อ AI ดูรูป{{ '' if ai else ' — จะเริ่มใช้เมื่อเปิด AI' }})</span>
     </div>
     {% if current_user.role in ('superadmin','admin') and n_examples %}<form method="post" action="{{ url_for('main.examples_clear') }}" onsubmit="return confirm('ล้างรูปตัวอย่างสอน AI ทั้งหมดของบริษัท?')"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ request.path }}"><button class="btn sm" type="submit">ล้างตัวอย่างสอน AI</button></form>{% endif %}
-    {% if can %}<form method="post" action="{{ url_for('main.job_ai_redo', job_id=job.id) }}" data-busy><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn pri" type="submit" {{ 'disabled' if not ai }}>ให้ AI จัดรูปใหม่</button></form>{% endif %}
+    {% if can %}<form method="post" action="{{ url_for('main.job_ai_redo', job_id=job.id) }}" data-busy><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn pri" type="submit" {{ 'disabled' if not ai and not n_memory }}>{{ 'ให้ AI จัดรูปใหม่' if ai else 'จัดรูปใหม่จากที่สอน' }}</button></form>{% endif %}
   </div>
 </div>
 {% if not photos %}<div class="card">ยังไม่มีรูป — <a href="{{ url_for('main.job_view', job_id=job.id) }}#import">Import ZIP</a></div>{% endif %}
@@ -53,6 +54,7 @@
           {% if pid and pid != 'NA' %}<span>
             {% if s.key in review %}<span class="tag m-low">ระบบไม่มั่นใจ {{ (conf.get(s.key,0)*100)|int }}%</span>
             {% elif m=='manual' %}<span class="tag m-manual">เลือกเอง</span>
+            {% elif m=='memory' %}<span class="tag m-mem">จำจากที่สอน</span>
             {% elif m=='ai' %}<span class="tag m-ai">AI {{ (conf.get(s.key,0)*100)|int }}%</span>
             {% elif m=='rule' %}<span class="tag m-rule">ตามตัวอย่าง</span>
             {% elif m=='gps' %}<span class="tag m-gps">พิกัด/KMZ {{ (conf.get(s.key,0)*100)|int }}%</span>

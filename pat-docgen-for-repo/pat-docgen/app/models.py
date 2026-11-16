@@ -209,6 +209,16 @@ class Example(db.Model):
     created_at = db.Column(db.DateTime, default=now)
 
 
+class PhotoMemory(db.Model):
+    """จำว่ารูปนี้ (ลายนิ้วมือรูป) คนเคยวางไว้ช่องไหน — Import รูปเดิมซ้ำจะวางช่องเดิมทันทีโดยไม่ต้องใช้ AI"""
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, index=True)
+    hash = db.Column(db.String(16), index=True)
+    slot = db.Column(db.String(60))
+    kind = db.Column(db.String(30))
+    created_at = db.Column(db.DateTime, default=now)
+
+
 class SigLib(db.Model):
     """คลังลายเซ็นของบริษัท (เลือกใช้ซ้ำได้ทุกงาน)"""
     id = db.Column(db.Integer, primary_key=True)

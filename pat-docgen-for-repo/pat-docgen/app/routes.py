@@ -12,11 +12,11 @@ from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import func, or_
 
 from . import pdfgen, vision
-from .importer import (KIND_TH, REVIEW_BELOW, auto_assign, features, fiber_length_from_images, haversine, norm_closure,
+from .importer import (KIND_TH, REVIEW_BELOW, auto_assign, dhash, hamming, features, fiber_length_from_images, haversine, norm_closure,
                        ocr_latlon, photo_time_key, run_import, slot_kind)
 from .sorfile import parse_sor
 from .layout import DEFAULT_FIELDS, all_slot_keys, build_pages, closure_list, link_budget, sites_from_link
-from .models import ROLES, STATUS, Attachment, Audit, Company, Document, Example, Job, Photo, SigLib, User, db, now
+from .models import ROLES, STATUS, Attachment, Audit, Company, Document, Example, Job, Photo, PhotoMemory, SigLib, User, db, now
 
 bp = Blueprint("main", __name__)
 
@@ -388,7 +388,7 @@ def _examples(company_id):
     rows = Example.query.filter_by(company_id=company_id).order_by(Example.created_at.desc()).all()
     out, seen = [], Counter()
     for r in rows:
-        if seen[r.kind] < 2 and os.path.exists(r.path):
+        if seen[r.kind] < 3 and os.path.exists(r.path):
             out.append((r.kind, r.path))
             seen[r.kind] += 1
     return out
@@ -431,7 +431,8 @@ def do_import(job, data, filename):
         flash(f"Import ไม่สำเร็จ: {e}", "error")
         return
     photos = res["photos"]
-    ai_note = run_ai(job, photos)
+    n_mem = apply_memory(job, photos)
+    ai_note = run_ai(job, photos) + (f", จำจากที่เคยสอน {n_mem} รูป" if n_mem else "")
     # ใช้รูปเดิมที่ import ไว้แล้วร่วมด้วย (Import หลายรอบ)
     prev = [{"id": p.id, "rel": p.rel, "name": p.name, "group": p.group, "sub": (int(p.sub) if p.group in ("site", "plug") and p.sub.isdigit() else p.sub),
              "kind": p.kind, "kconf": p.kconf, "path": p.path, "feat": features(p.path), "exif_time": None, "lat": p.lat, "lon": p.lon}
@@ -446,6 +447,7 @@ def do_import(job, data, filename):
             cl.append(c)
     job.setj("closures", cl)
     assign_new, conf_new, method_new = auto_assign(prev + photos, closure_list(job.fields, cl))
+    merge_memory(photos, set(all_slot_keys(job_pages(job))), assign_new, conf_new, method_new)
     assign, conf, method = job.assign, job.j("conf", {}), job.j("method", {})
     review = set(job.j("review", []))
     added = 0
@@ -491,11 +493,70 @@ def do_import(job, data, filename):
     flash(f"Import {len(photos)} รูป — วางเข้าช่องให้ {added} ช่อง (ให้ตรวจ {len([s for s in review if assign.get(s)])} ช่อง){ai_note}", "ok")
 
 
+def _remember(job, photo, slot):
+    """จำว่ารูปนี้อยู่ช่องนี้ (ต่อบริษัท)"""
+    try:
+        h = dhash(photo.path)
+    except OSError:
+        return
+    PhotoMemory.query.filter_by(company_id=job.company_id, slot=slot, hash=h).delete()
+    db.session.add(PhotoMemory(company_id=job.company_id, hash=h, slot=slot, kind=slot_kind(slot)))
+
+
+def _forget(job, photo, slot):
+    try:
+        h = dhash(photo.path)
+    except OSError:
+        return
+    PhotoMemory.query.filter_by(company_id=job.company_id, slot=slot, hash=h).delete()
+
+
+def apply_memory(job, photos):
+    """ใส่ p['mem_slots'] / p['kind'] ให้รูปที่ตรงกับที่เคยสอนไว้ คืนจำนวนรูปที่จำได้"""
+    mem = PhotoMemory.query.filter_by(company_id=job.company_id).all()
+    if not mem:
+        return 0
+    by_hash = {}
+    for m in mem:
+        by_hash.setdefault(m.hash, []).append(m)
+    n = 0
+    for p in photos:
+        try:
+            h = dhash(p["path"])
+        except OSError:
+            continue
+        hit = by_hash.get(h)
+        if not hit:
+            near = [k for k in by_hash if hamming(k, h) <= 3]
+            hit = by_hash[near[0]] if len(near) == 1 else None
+        if hit:
+            p["mem_slots"] = [m.slot for m in hit]
+            p["kind"] = next((m.kind for m in hit if m.kind), p.get("kind"))
+            p["kconf"] = 1.0
+            n += 1
+    return n
+
+
+def merge_memory(photos, valid_slots, assign_new, conf_new, method_new):
+    """ให้ช่องที่จำได้ชนะผลของ AI/กฎ"""
+    for p in photos:
+        slots = [s_ for s_ in p.get("mem_slots", []) if s_ in valid_slots]
+        if not slots:
+            continue
+        for s_ in [k for k, v in assign_new.items() if v == p["id"] and k not in slots and method_new.get(k) != "rule"]:
+            assign_new.pop(s_)
+        for s_ in slots:
+            assign_new[s_], conf_new[s_], method_new[s_] = p["id"], 1.0, "memory"
+
+
 def run_ai(job, photos):
     """ให้ AI จัดประเภทรูป (แก้ dict ใน photos) คืนข้อความสรุปสำหรับ log/flash"""
     if not vision.enabled() or not photos:
         return ""
-    targets = [(p["id"], p["path"], os.path.dirname(p["rel"])) for p in photos if p["group"] not in ("design", "planwork", "route")]
+    targets = [(p["id"], p["path"], os.path.dirname(p["rel"])) for p in photos
+               if p["group"] not in ("design", "planwork", "route") and not p.get("mem_slots")]
+    if not targets:
+        return ""
     result, usage = vision.classify(targets, _examples(job.company_id))
     for p in photos:
         r = result.get(p["id"])
@@ -531,21 +592,21 @@ def _photo_dicts(job):
 def job_ai_redo(job_id):
     """ให้ AI ดูรูปทั้งหมดของงานนี้ใหม่ (ใช้ตัวอย่างที่สอนล่าสุด) แล้วจัดช่องใหม่ — ไม่แตะช่องที่คนเลือกเอง"""
     job = get_job(job_id, edit=True)
-    if not vision.enabled():
-        flash("ยังไม่ได้เปิด AI — ใส่ ANTHROPIC_API_KEY ใน Railway Variables ก่อน", "error")
-        return redirect(url_for("main.job_photos", job_id=job.id))
     photos = _photo_dicts(job)
     method = job.j("method", {})
     manual_ids = {pid for s_, pid in job.assign.items() if method.get(s_) == "manual"}
     for p in photos:
         if p["id"] not in manual_ids:
             p["kind"] = None
-    note = run_ai(job, [p for p in photos if p["id"] not in manual_ids])
+    free = [p for p in photos if p["id"] not in manual_ids]
+    n_mem = apply_memory(job, free)
+    note = run_ai(job, free) + (f", จำจากที่เคยสอน {n_mem} รูป" if n_mem else "")
     for p in photos:
         ph = db.session.get(Photo, p["id"])
         if ph and p["id"] not in manual_ids:
             ph.kind, ph.kconf = p.get("kind"), p.get("kconf")
     new_a, new_c, new_m = auto_assign(photos, closure_list(job.fields, job.closures))
+    merge_memory(free, set(all_slot_keys(job_pages(job))), new_a, new_c, new_m)
     assign, conf = job.assign, job.j("conf", {})
     review = {k for k in job.j("review", []) if method.get(k) == "manual"}
     changed = 0
@@ -736,7 +797,8 @@ def job_photos(job_id):
     return render_template("photos.html", job=job, pages=pages, pno=pno, prefs=prefs, photos=photos, used=used, groups=groups,
                            assign=job.assign, conf=job.j("conf", {}), method=job.j("method", {}),
                            review=set(job.j("review", [])), prog=progress(job, pages), STATUS=STATUS, ai=vision.enabled(),
-                           ai_info=job.fields.get("_ai"), n_examples=len(_examples(job.company_id)), KIND_TH=KIND_TH)
+                           ai_info=job.fields.get("_ai"), n_examples=len(_examples(job.company_id)), KIND_TH=KIND_TH,
+                           n_memory=PhotoMemory.query.filter_by(company_id=job.company_id).count())
 
 
 def _set_slot(job, slot, pid, how="manual"):
@@ -765,6 +827,8 @@ def _set_slot(job, slot, pid, how="manual"):
     if pid and pid != "NA":
         p = db.session.get(Photo, pid)
         k = slot_kind(slot)
+        if p:
+            _remember(job, p, slot)
         if p and k:
             p.kind = k
             _add_example(job, p, k)
@@ -830,15 +894,25 @@ def job_teach(job_id):
     n = 0
     for slot, pid in job.assign.items():
         k = slot_kind(slot)
-        if k and pid and pid != "NA":
+        if pid and pid != "NA":
             p = db.session.get(Photo, pid)
             if p:
-                p.kind = k
-                _add_example(job, p, k)
+                _remember(job, p, slot)
                 n += 1
+                if k:
+                    p.kind = k
+                    _add_example(job, p, k)
+    # รูปในโฟลเดอร์ Site / Plug Port / Power ที่ "ไม่ได้ใช้" ในเอกสาร -> สอน AI ว่าเป็นรูปที่ต้องข้าม
+    used = {v for v in job.assign.values() if v and v != "NA"}
+    skipped = 0
+    for p in Photo.query.filter(Photo.job_id == job.id, Photo.group.in_(["site", "plug", "power"])).all():
+        if p.id not in used and skipped < 6:
+            p.kind = p.kind if p.kind in ("sign", "sfp", "otdr_screen") else "other"
+            _add_example(job, p, p.kind)
+            skipped += 1
     log("teach", f"ใช้งานนี้เป็นตัวอย่างสอน AI ({n} รูป)", job)
     db.session.commit()
-    flash(f"บันทึกเป็นตัวอย่างสอน AI แล้ว {n} รูป — งานถัดไปของบริษัทจะใช้เทียบ (งานที่ Import ไว้แล้ว กด ‘ให้ AI จัดรูปใหม่’ เพื่อจัดใหม่)", "ok")
+    flash(f"จำการจัดรูปของงานนี้แล้ว {n} ช่อง (รูปเดิม Import ซ้ำจะเข้าช่องเดิมทันที) และบันทึกเป็นตัวอย่างสอน AI — งานถัดไปของบริษัทจะใช้เทียบ (งานที่ Import ไว้แล้ว กด ‘ให้ AI จัดรูปใหม่’ เพื่อจัดใหม่)", "ok")
     return redirect(url_for("main.job_photos", job_id=job.id))
 
 
@@ -1262,6 +1336,10 @@ def examples_clear():
     if not current_user.is_super:
         q = q.filter(Example.company_id == current_user.company_id)
     n = q.delete()
+    mq = PhotoMemory.query
+    if not current_user.is_super:
+        mq = mq.filter(PhotoMemory.company_id == current_user.company_id)
+    mq.delete()
     log("examples_clear", f"ล้างรูปตัวอย่างสอน AI {n} รูป")
     db.session.commit()
     flash(f"ล้างรูปตัวอย่างสอน AI แล้ว {n} รูป", "ok")
