@@ -398,7 +398,7 @@ def page_deficiency(job, company, logo_l):
     <tr><td class="r b" style="height:20pt">ลายเซ็น</td><td class="c">{mgr['img']}</td><td></td><td></td></tr>
     <tr><td class="r b" style="height:15pt">ชื่อตัวบรรจง</td><td class="c b">{esc(mgr['name'])}</td><td></td><td></td></tr>
     <tr><td class="r b" style="height:15pt">ชื่อหน่วยงาน</td><td class="c b">{esc(company.get('name'))}</td><td class="c b">Rollout</td><td class="c b">NOP</td></tr>
-    <tr><td class="r b" style="height:15pt">วันที่</td><td class="c b">{esc(mgr['date'])}</td><td></td><td></td></tr>
+    <tr><td class="r b" style="height:15pt">วันที่</td><td class="c b">{_def_date(f) if _def_date(f)[0].isdigit() else esc(mgr['date'])}</td><td></td><td></td></tr>
   </table></div></div>"""
 
 # ================================================================ Report OTDR (.sor)

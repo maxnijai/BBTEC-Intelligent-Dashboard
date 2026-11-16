@@ -16,7 +16,7 @@ from .importer import (KIND_TH, REVIEW_BELOW, auto_assign, features, fiber_lengt
                        ocr_latlon, photo_time_key, run_import, slot_kind)
 from .sorfile import parse_sor
 from .layout import DEFAULT_FIELDS, all_slot_keys, build_pages, closure_list, link_budget, sites_from_link
-from .models import ROLES, STATUS, Attachment, Audit, Company, Document, Example, Job, Photo, User, db, now
+from .models import ROLES, STATUS, Attachment, Audit, Company, Document, Example, Job, Photo, SigLib, User, db, now
 
 bp = Blueprint("main", __name__)
 
@@ -186,7 +186,8 @@ def job_view(job_id):
     return render_template("job.html", job=job, f=f, FIELD_FORM=FIELD_FORM, prog=prog, docs=docs, atts=atts, hist=hist,
                            STATUS=STATUS, s1=s1, s2=s2, lb=link_budget(f), checks=checks, SIG_ROLES=SIG_ROLES,
                            sheet_cfg=job.j("sheet_cfg", {}), kmz=job.j("kmz", []), pages=pages,
-                           coords=closure_coords(job), ai=vision.enabled())
+                           coords=closure_coords(job), ai=vision.enabled(),
+                           siglib=SigLib.query.filter_by(company_id=job.company_id).order_by(SigLib.name).all())
 
 
 def run_checks(job, pages, f, atts):
@@ -298,8 +299,29 @@ def job_signatures(job_id):
             if up and up.filename:
                 f[f"sig_{role}_img"] = _save_sig(up, folder, role)
                 done.append(label)
+                nm = (f.get(f"sig_{role}_name") or "").strip()
+                if nm:  # เก็บเข้าคลังลายเซ็นของบริษัท (ชื่อเดิม = แทนที่)
+                    lib_dir = os.path.join(current_app.config["DATA_DIR"], "siglib", str(job.company_id))
+                    os.makedirs(lib_dir, exist_ok=True)
+                    lp = os.path.join(lib_dir, uuid.uuid4().hex[:10] + ".png")
+                    shutil.copy(f[f"sig_{role}_img"], lp)
+                    old_ = SigLib.query.filter_by(company_id=job.company_id, name=nm).first()
+                    if old_:
+                        old_.path, old_.position = lp, f.get("sig_sender_pos", "") if role == "sender" else old_.position
+                    else:
+                        db.session.add(SigLib(company_id=job.company_id, name=nm, path=lp, created_by=current_user.id,
+                                              position=f.get("sig_sender_pos", "") if role == "sender" else ""))
+                    f[f"sig_{role}_img"] = lp
         except ValueError as e:
             flash(str(e), "error")
+        lib_id = request.form.get(f"sig_{role}_lib", type=int)
+        if lib_id and not (up and up.filename):
+            it = db.session.get(SigLib, lib_id)
+            if it and it.company_id == job.company_id and os.path.exists(it.path):
+                f[f"sig_{role}_img"], f[f"sig_{role}_name"] = it.path, it.name
+                if role == "sender" and it.position and not f.get("sig_sender_pos"):
+                    f["sig_sender_pos"] = it.position
+                done.append(f"{label} (จากคลัง: {it.name})")
         if request.form.get(f"sig_{role}_mine") == "1" and current_user.signature_path:
             f[f"sig_{role}_img"] = current_user.signature_path
             f[f"sig_{role}_name"] = f.get(f"sig_{role}_name") or current_user.name
@@ -1128,3 +1150,159 @@ def audit():
     rows = q.order_by(Audit.created_at.desc()).limit(500).all()
     jobs = {j.id: j for j in Job.query.filter(Job.id.in_({r.job_id for r in rows if r.job_id})).all()}
     return render_template("audit.html", rows=rows, jobs=jobs)
+
+
+# ---------------------------------------------------------------- ลบข้อมูล / ล้างประวัติ
+
+
+def _rm(path):
+    try:
+        if path and os.path.exists(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
+@bp.route("/siglib/<int:sid>/img")
+@login_required
+def siglib_img(sid):
+    it = db.session.get(SigLib, sid) or abort(404)
+    if not current_user.is_super and it.company_id != current_user.company_id:
+        abort(404)
+    return send_file(it.path, mimetype="image/png")
+
+
+@bp.route("/siglib/<int:sid>/delete", methods=["POST"])
+@login_required
+def siglib_delete(sid):
+    it = db.session.get(SigLib, sid) or abort(404)
+    if not current_user.can_edit() or (not current_user.is_super and it.company_id != current_user.company_id):
+        abort(403)
+    log("siglib_delete", f"ลบลายเซ็นในคลัง: {it.name}", company_id=it.company_id)
+    db.session.delete(it)   # ไม่ลบไฟล์ เพราะงานเดิมอาจยังใช้อยู่
+    db.session.commit()
+    flash("ลบลายเซ็นออกจากคลังแล้ว", "ok")
+    return redirect(request.form.get("next") or url_for("main.dashboard"))
+
+
+@bp.route("/docs/<int:doc_id>/delete", methods=["POST"])
+@login_required
+def doc_delete(doc_id):
+    d = db.session.get(Document, doc_id) or abort(404)
+    job = get_job(d.job_id, edit=True)
+    log("doc_delete", f"ลบ PDF {d.kind} v{d.version}", job)
+    _rm(d.path)
+    db.session.delete(d)
+    db.session.commit()
+    return redirect(url_for("main.job_view", job_id=job.id) + "#docs")
+
+
+@bp.route("/jobs/<int:job_id>/docs-clear", methods=["POST"])
+@login_required
+def docs_clear(job_id):
+    job = get_job(job_id, edit=True)
+    docs = Document.query.filter_by(job_id=job.id).all()
+    keep = max((d.version for d in docs), default=0) if request.form.get("keep_latest") else None
+    n = 0
+    for d in docs:
+        if d.version != keep:
+            _rm(d.path)
+            db.session.delete(d)
+            n += 1
+    log("doc_delete", f"ลบ PDF เก่า {n} ไฟล์" + (" (เก็บเวอร์ชันล่าสุด)" if keep else ""), job)
+    db.session.commit()
+    flash(f"ลบ PDF แล้ว {n} ไฟล์", "ok")
+    return redirect(url_for("main.job_view", job_id=job.id) + "#docs")
+
+
+def _delete_photo(job, p):
+    a = job.assign
+    for slot in [k for k, v in a.items() if v == p.id]:
+        a.pop(slot)
+    job.setj("assign", a)
+    Example.query.filter_by(photo_id=p.id).delete()
+    _rm(p.path)
+    _rm(p.thumb)
+    db.session.delete(p)
+
+
+@bp.route("/photo/<pid>/delete", methods=["POST"])
+@login_required
+def photo_delete(pid):
+    p = db.session.get(Photo, pid) or abort(404)
+    job = get_job(p.job_id, edit=True)
+    name = p.rel
+    _delete_photo(job, p)
+    log("photo_delete", f"ลบรูป {name}", job)
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@bp.route("/jobs/<int:job_id>/photos-clear", methods=["POST"])
+@login_required
+def photos_clear(job_id):
+    job = get_job(job_id, edit=True)
+    ps = Photo.query.filter_by(job_id=job.id).all()
+    for p in ps:
+        _delete_photo(job, p)
+    for k in ("assign", "conf", "method"):
+        job.setj(k, {})
+    job.setj("review", [])
+    log("photo_delete", f"ลบรูปทั้งหมดของงาน ({len(ps)} รูป)", job)
+    db.session.commit()
+    flash(f"ลบรูปทั้งหมดแล้ว {len(ps)} รูป — Import ใหม่ได้เลย", "ok")
+    return redirect(url_for("main.job_view", job_id=job.id) + "#import")
+
+
+@bp.route("/examples-clear", methods=["POST"])
+@login_required
+def examples_clear():
+    admin_required()
+    q = Example.query
+    if not current_user.is_super:
+        q = q.filter(Example.company_id == current_user.company_id)
+    n = q.delete()
+    log("examples_clear", f"ล้างรูปตัวอย่างสอน AI {n} รูป")
+    db.session.commit()
+    flash(f"ล้างรูปตัวอย่างสอน AI แล้ว {n} รูป", "ok")
+    return redirect(request.form.get("next") or url_for("main.dashboard"))
+
+
+@bp.route("/jobs/<int:job_id>/delete", methods=["POST"])
+@login_required
+def job_delete(job_id):
+    job = get_job(job_id)
+    if not current_user.can_approve(job):
+        abort(403)
+    log("delete", f"ลบงาน {job.link_name}", job)
+    for p in Photo.query.filter_by(job_id=job.id).all():
+        Example.query.filter_by(photo_id=p.id).delete()
+        db.session.delete(p)
+    Attachment.query.filter_by(job_id=job.id).delete()
+    Document.query.filter_by(job_id=job.id).delete()
+    shutil.rmtree(job_dir(job), ignore_errors=True)
+    db.session.delete(job)
+    db.session.commit()
+    flash("ลบงานแล้ว", "ok")
+    return redirect(url_for("main.dashboard"))
+
+
+@bp.route("/audit/clear", methods=["POST"])
+@login_required
+def audit_clear():
+    admin_required()
+    q = Audit.query
+    if not current_user.is_super:
+        q = q.filter(Audit.company_id == current_user.company_id)
+    scope = request.form.get("scope", "all")
+    if scope == "old":
+        from datetime import timedelta
+        q = q.filter(Audit.created_at < now() - timedelta(days=30))
+    elif scope == "noise":
+        q = q.filter(Audit.action.in_(["login", "logout", "download", "assign", "swap", "kmz"]))
+    n = q.delete(synchronize_session=False)
+    label = {"all": "ทั้งหมด", "old": "ที่เก่ากว่า 30 วัน", "noise": "เฉพาะ login/ดาวน์โหลด/ย้ายรูป"}.get(scope, scope)
+    log("audit_clear", f"ล้าง Audit log {label}: {n} รายการ")
+    db.session.commit()
+    flash(f"ล้าง Audit log แล้ว {n} รายการ", "ok")
+    return redirect(url_for("main.audit"))

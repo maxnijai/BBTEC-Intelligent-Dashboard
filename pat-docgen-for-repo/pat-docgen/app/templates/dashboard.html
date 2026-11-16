@@ -18,7 +18,7 @@
 </div>
 <div class="card" style="padding:0;overflow:hidden">
   <div class="scroll"><table class="t" style="min-width:960px">
-    <thead><tr><th>Link / Site</th>{% if current_user.is_super %}<th>บริษัท</th>{% endif %}<th>ผู้สร้าง</th><th>แก้ล่าสุดโดย</th><th>รูป</th><th>สถานะ</th><th>อัปเดต</th></tr></thead>
+    <thead><tr><th>Link / Site</th>{% if current_user.is_super %}<th>บริษัท</th>{% endif %}<th>ผู้สร้าง</th><th>แก้ล่าสุดโดย</th><th>รูป</th><th>สถานะ</th><th>อัปเดต</th><th></th></tr></thead>
     <tbody>
     {% for j, p in rows %}
       <tr>
@@ -29,9 +29,10 @@
         <td style="min-width:130px"><span class="sub">{{ p.filled }}/{{ p.total }} ช่อง{% if p.review %} · ตรวจ {{ p.review }}{% endif %}</span><div class="bar"><i style="width:{{ (100*p.filled/p.total)|round|int if p.total else 0 }}%;{{ 'background:#15803D' if p.filled==p.total }}"></i></div></td>
         <td><span class="pill {{ STATUS[j.status][1] }}">{{ STATUS[j.status][0] }}</span></td>
         <td class="sub">{{ j.updated_at|th }}</td>
+        <td>{% if current_user.can_approve(j) %}<form method="post" action="{{ url_for('main.job_delete', job_id=j.id) }}" onsubmit="return confirm('ลบงานนี้พร้อมรูปและ PDF ทั้งหมด? กู้คืนไม่ได้')"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sm" type="submit">ลบ</button></form>{% endif %}</td>
       </tr>
     {% else %}
-      <tr><td colspan="7" class="sub" style="padding:30px;text-align:center">ยังไม่มีงาน — กด “สร้างงานใหม่” แล้ววางไฟล์ ZIP รูปได้เลย</td></tr>
+      <tr><td colspan="8" class="sub" style="padding:30px;text-align:center">ยังไม่มีงาน — กด “สร้างงานใหม่” แล้ววางไฟล์ ZIP รูปได้เลย</td></tr>
     {% endfor %}
     </tbody>
   </table></div>

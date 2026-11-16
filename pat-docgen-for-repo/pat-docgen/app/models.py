@@ -209,6 +209,17 @@ class Example(db.Model):
     created_at = db.Column(db.DateTime, default=now)
 
 
+class SigLib(db.Model):
+    """คลังลายเซ็นของบริษัท (เลือกใช้ซ้ำได้ทุกงาน)"""
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, index=True)
+    name = db.Column(db.String(200))
+    position = db.Column(db.String(200), default="")
+    path = db.Column(db.String(500))
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    created_at = db.Column(db.DateTime, default=now)
+
+
 MIGRATIONS = [  # (table, column, DDL type) — เพิ่มคอลัมน์ใหม่ให้ฐานข้อมูลเดิมอัตโนมัติ
     ("photo", "kind", "VARCHAR(30)"), ("photo", "kconf", "FLOAT"),
     ("attachment", "meta_json", "TEXT"),

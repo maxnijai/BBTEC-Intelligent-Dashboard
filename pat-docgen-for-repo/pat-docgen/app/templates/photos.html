@@ -29,6 +29,7 @@
         {% if ai_info.errors %}<br><span style="color:#B91C1C;font-weight:700">ผิดพลาด: {{ ai_info.errors|join(' / ') }}</span>{% endif %}{% endif %}
       <br><span class="sub">รูปตัวอย่างที่สอนแล้วของบริษัทนี้: {{ n_examples }} รูป (ใช้เทียบเมื่อ AI ดูรูป{{ '' if ai else ' — จะเริ่มใช้เมื่อเปิด AI' }})</span>
     </div>
+    {% if current_user.role in ('superadmin','admin') and n_examples %}<form method="post" action="{{ url_for('main.examples_clear') }}" onsubmit="return confirm('ล้างรูปตัวอย่างสอน AI ทั้งหมดของบริษัท?')"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ request.path }}"><button class="btn sm" type="submit">ล้างตัวอย่างสอน AI</button></form>{% endif %}
     {% if can %}<form method="post" action="{{ url_for('main.job_ai_redo', job_id=job.id) }}" data-busy><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn pri" type="submit" {{ 'disabled' if not ai }}>ให้ AI จัดรูปใหม่</button></form>{% endif %}
   </div>
 </div>
@@ -68,7 +69,7 @@
 <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mt">
   <div class="box">
     <div class="row between"><h2 id="mt" style="margin:0">เลือกรูป</h2>
-      <div class="row"><button class="btn sm" type="button" data-pick="NA">ใส่ N/A</button><button class="btn sm" type="button" data-pick="">เว้นว่าง</button><button class="btn sm" type="button" id="mclose">ปิด</button></div></div>
+      <div class="row">{% if can %}<label class="sub" style="font-weight:400;margin:0;color:#B91C1C"><input type="checkbox" id="delmode"> โหมดลบรูป (คลิกรูปเพื่อลบถาวร)</label>{% endif %}<button class="btn sm" type="button" data-pick="NA">ใส่ N/A</button><button class="btn sm" type="button" data-pick="">เว้นว่าง</button><button class="btn sm" type="button" id="mclose">ปิด</button></div></div>
     <div class="sub" style="margin:4px 0 10px">รูปพื้นหลังเขียว = ใช้ในช่องอื่นแล้ว (ใช้ซ้ำได้)</div>
     <div id="pools">
     {% for folder, g in groups|dictsort %}
@@ -97,10 +98,17 @@ document.querySelectorAll('.slot').forEach(b=>b.addEventListener('click',()=>{
   modal.querySelectorAll('img[data-src]').forEach(i=>{i.src=i.dataset.src;i.removeAttribute('data-src')});
   modal.classList.add('open');
 }));
-document.getElementById('mclose').onclick=()=>modal.classList.remove('open');
+document.getElementById('mclose').onclick=()=>{modal.classList.remove('open'); if(window._needReload) location.reload()};
 modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')modal.classList.remove('open')});
 modal.querySelectorAll('[data-pick]').forEach(btn=>btn.addEventListener('click',async()=>{
+  const dm=document.getElementById('delmode');
+  if(dm&&dm.checked&&btn.dataset.pick&&btn.dataset.pick!=='NA'){
+    if(!confirm('ลบรูปนี้ถาวร?')) return;
+    const f2=new FormData(); f2.append('_csrf',csrf);
+    const r2=await fetch('/photo/'+btn.dataset.pick+'/delete',{method:'POST',body:f2}); const j2=await r2.json().catch(()=>({}));
+    if(j2.ok){btn.remove(); window._needReload=true} else alert('ลบไม่สำเร็จ'); return;
+  }
   const fd=new FormData(); fd.append('slot',cur.dataset.slot); fd.append('photo',btn.dataset.pick); fd.append('_csrf',csrf);
   const r=await fetch(url,{method:'POST',body:fd}); const j=await r.json().catch(()=>({}));
   if(!j.ok){alert('บันทึกไม่สำเร็จ');return}

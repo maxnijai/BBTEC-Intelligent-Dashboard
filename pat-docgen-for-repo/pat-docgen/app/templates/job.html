@@ -22,6 +22,7 @@
       </div>
     </form>
     {% endif %}
+    {% if can and prog.filled %}<form method="post" action="{{ url_for('main.photos_clear', job_id=job.id) }}" style="margin-top:8px" onsubmit="return confirm('ลบรูปทั้งหมดของงานนี้และการจัดช่องทั้งหมด? กู้คืนไม่ได้')"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sm" type="submit">ลบรูปทั้งหมด (เพื่อ Import ใหม่)</button></form>{% endif %}
     {% if kmz %}<div class="sub" style="margin-top:8px">KMZ: {{ kmz|length }} จุด — {{ kmz|map(attribute=0)|join(', ') }}</div>{% endif %}
     {% if job.closures %}<div class="sub">หัวต่อที่ใช้ทำหน้า: {{ (f.closures or job.closures|join(', ')) }}</div>{% endif %}
   </section>
@@ -104,6 +105,7 @@
             {% if f.get('sig_'~role~'_img') %}<img src="{{ url_for('main.job_sig_img', job_id=job.id, role=role) }}" alt="ลายเซ็น {{ label }}" style="height:38px;border:1px dashed #D1D5DB;border-radius:6px;padding:2px;background:#fff">{% else %}<span class="sub">ยังไม่มีลายเซ็น</span>{% endif %}
             {% if can %}
             <label class="btn sm" for="sf_{{ role }}" style="margin:0">อัปโหลดลายเซ็น</label><input class="vh" id="sf_{{ role }}" type="file" name="sig_{{ role }}_file" accept=".png,.jpg,.jpeg">
+            {% if siglib %}<label class="vh" for="sl_{{ role }}">เลือกจากคลัง</label><select id="sl_{{ role }}" name="sig_{{ role }}_lib" style="width:190px;height:32px"><option value="">— เลือกลายเซ็นที่เคยอัปโหลด —</option>{% for it in siglib %}<option value="{{ it.id }}">{{ it.name }}</option>{% endfor %}</select>{% endif %}
             {% if current_user.signature_path %}<label class="sub" style="font-weight:400;margin:0"><input type="checkbox" name="sig_{{ role }}_mine" value="1"> ใช้ลายเซ็นของฉัน</label>{% endif %}
             {% if f.get('sig_'~role~'_img') %}<label class="sub" style="font-weight:400;margin:0"><input type="checkbox" name="sig_{{ role }}_clear" value="1"> ลบลายเซ็น</label>{% endif %}
             {% endif %}
@@ -113,6 +115,15 @@
       </div>
       {% if can %}<div style="margin-top:12px"><button class="btn pri" type="submit">บันทึกผู้ลงนาม</button></div>{% endif %}
     </form>
+    {% if siglib %}
+    <div style="margin-top:12px;font-weight:700;font-size:14px">คลังลายเซ็นของบริษัท <span class="sub" style="font-weight:400">(ลายเซ็นที่อัปโหลดพร้อมชื่อ จะถูกเก็บไว้ให้เลือกใช้ในงานถัดไป)</span></div>
+    <div class="row" style="margin-top:6px">
+      {% for it in siglib %}<div style="border:1px solid #E5E7EB;border-radius:8px;padding:6px 8px;text-align:center;font-size:12px">
+        <img src="{{ url_for('main.siglib_img', sid=it.id) }}" alt="ลายเซ็น {{ it.name }}" style="height:30px;display:block;margin:0 auto 2px">{{ it.name }}
+        {% if can_wf %}<form method="post" action="{{ url_for('main.siglib_delete', sid=it.id) }}" onsubmit="return confirm('ลบลายเซ็นนี้ออกจากคลัง?')"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ url_for('main.job_view', job_id=job.id) }}#sign"><button class="btn sm" type="submit" style="min-height:22px;font-size:11px">ลบ</button></form>{% endif %}
+      </div>{% endfor %}
+    </div>
+    {% endif %}
   </section>
 
   <section class="card" id="kmz">
@@ -158,8 +169,10 @@
         <div class="sub">{{ d.creator.name if d.creator }} · {{ d.created_at|th }}</div>
         <a class="btn sm" href="{{ url_for('main.doc_download', doc_id=d.id) }}?inline=1" target="_blank" rel="noopener">เปิดดู</a>
         <a class="btn sm" href="{{ url_for('main.doc_download', doc_id=d.id) }}">ดาวน์โหลด</a>
+        {% if can %}<form method="post" action="{{ url_for('main.doc_delete', doc_id=d.id) }}" style="display:inline" onsubmit="return confirm('ลบไฟล์นี้?')"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sm" type="submit">ลบ</button></form>{% endif %}
       </div>
     {% else %}<div class="sub">ยังไม่ได้สร้าง</div>{% endfor %}
+    {% if can and docs|length > 2 %}<form method="post" action="{{ url_for('main.docs_clear', job_id=job.id) }}" style="margin-top:8px" onsubmit="return confirm('ลบ PDF เวอร์ชันเก่าทั้งหมด เก็บเฉพาะล่าสุด?')"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="keep_latest" value="1"><button class="btn sm" type="submit">ลบเวอร์ชันเก่า เก็บเฉพาะล่าสุด</button></form>{% endif %}
   </section>
 
   <section class="card">

@@ -3,6 +3,15 @@
 {% block main %}
 <h1>Audit log</h1>
 <div class="sub" style="margin-bottom:14px">ทุกการกระทำในระบบ: ใคร ทำอะไร กับงานไหน เมื่อไร (500 รายการล่าสุด)</div>
+{% if current_user.role in ('superadmin','admin') %}
+<form method="post" action="{{ url_for('main.audit_clear') }}" class="row" style="margin-bottom:12px" onsubmit="return confirm('ล้าง Audit log ตามที่เลือก? กู้คืนไม่ได้')">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <label class="vh" for="sc">ขอบเขต</label>
+  <select id="sc" name="scope" style="width:300px"><option value="noise">เฉพาะ login / ดาวน์โหลด / ย้ายรูป (ที่รก)</option><option value="old">ที่เก่ากว่า 30 วัน</option><option value="all">ทั้งหมด</option></select>
+  <button class="btn bad" type="submit">ล้าง Audit log</button>
+  <span class="sub">{{ 'ทุกบริษัท' if current_user.is_super else 'เฉพาะบริษัทของคุณ' }} · ระบบจะบันทึกไว้ 1 บรรทัดว่าใครล้าง</span>
+</form>
+{% endif %}
 <div class="card" style="padding:0;overflow:hidden"><div class="scroll">
 <table class="t" style="min-width:860px">
   <thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>งาน</th><th>การกระทำ</th><th>รายละเอียด</th></tr></thead>
