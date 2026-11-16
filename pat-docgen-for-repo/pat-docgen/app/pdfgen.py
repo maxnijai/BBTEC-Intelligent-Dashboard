@@ -49,9 +49,11 @@ body {{ font-family: SarabunL, SarabunT, sans-serif; color: #000; margin: 0; fon
 /* ---- ตาราง */
 table.g {{ border-collapse: collapse; table-layout: fixed; width: 100%; }}
 table.g td, table.g th {{ border: 0.6pt solid #000; padding: 0 3pt; height: 12pt; font-weight: 400; overflow: hidden; white-space: nowrap; }}
-.c {{ text-align: center; }} .r {{ text-align: right; }} .b {{ font-weight: 700; }}
+.c {{ text-align: center; }} .r {{ text-align: right; }} .b {{ font-weight: 700 !important; }}
 .cy {{ background: #66FFFF; }} .pk {{ background: #E6B8B7; }} .gy {{ background: #BFBFBF; }}
 .sig img {{ max-height: 22pt; max-width: 110pt; }}
+.vt {{ position: absolute; left: 0; top: 24pt; width: 50pt; height: 19pt; transform-origin: 0 0; transform: rotate(-90deg);
+      font-size: 5.6pt; white-space: nowrap; text-align: center; line-height: 19pt; }}
 """
 
 
@@ -179,22 +181,22 @@ def page_checklist(job, logo_l, logo_r):
             if grp == "acc":
                 part = f'<td rowspan="{acc_n}" class="c b" style="font-size:12pt">บัญชี</td>'
             else:
-                part = f'<td rowspan="{tm_n}" class="c" style="font-size:10.5pt">Transport Media</td>'
-        g = ' class="gy"' if grey else ""
-        rows.append(f'<tr><td style="font-size:6.3pt">{text}</td><td class="c"{g}>{qty}</td><td class="c"{g}>{tick}</td><td></td>{part}</tr>')
+                part = f'<td rowspan="{tm_n}" class="c" style="font-size:9pt;white-space:normal">Transport Media</td>'
+        q = "c gy" if grey else "c"
+        rows.append(f'<tr><td style="font-size:6.3pt">{text}</td><td class="{q}">{qty}</td><td class="c">{tick}</td><td></td>{part}</tr>')
     lines = "".join('<tr><td style="height:12.3pt"></td><td></td></tr>' for _ in range(6))
     return f"""<div class="pg"><div class="abs" style="left:44pt;top:18pt;width:553pt">
 <table class="g">
  <colgroup><col style="width:315pt"><col style="width:20pt"><col style="width:20pt"><col style="width:123pt"><col style="width:75pt"></colgroup>
  <tr><td colspan="4" style="height:26pt"><div style="display:flex;align-items:center;height:24pt">
    <div style="width:100pt;padding-left:18pt">{f'<img src="{_uri(logo_l)}" style="height:18pt">' if logo_l else ''}</div>
-   <div style="flex:1;font-size:11pt;color:#0000FF;font-weight:700">รายการเอกสารส่งงานติดตั้ง Optical Fiber Cable</div>
+   <div style="flex:1;font-size:11pt;color:#0000FF">รายการเอกสารส่งงานติดตั้ง Optical Fiber Cable</div>
    <div style="width:60pt">{f'<img src="{_uri(logo_r)}" style="height:18pt">' if logo_r else ''}</div></div></td>
    <td style="font-size:6.3pt;vertical-align:top">OR No. {esc(f.get('or_no'))}</td></tr>
  <tr><td style="height:26pt"><span style="font-size:10pt">เส้นทาง :</span><span style="position:relative;left:60pt;font-size:9pt">{esc(job['link_name'])}</span></td>
    <td colspan="3" style="font-size:6.3pt">OFC &nbsp; ({esc(f.get('ofc'))}) &nbsp; Core {esc(f.get('core'))}</td><td style="font-size:6.3pt">SAP Job No. : {esc(f.get('sap_no'))}</td></tr>
  <tr><td class="c b" style="height:56pt;font-size:10.5pt">รายการเอกสารส่งงาน ตามมาตรฐาน BBTEC</td>
-   <td class="c" style="font-size:5pt;white-space:normal;line-height:1.1">จำนวนเอกสาร (ชุด)</td><td class="c" style="font-size:5pt;white-space:normal;line-height:1.1">ขีด /ช่องเอกสารที่ส่ง</td>
+   <td style="padding:0;height:56pt;overflow:hidden;position:relative"><div class="vt">จำนวนเอกสาร (ชุด)</div></td><td style="padding:0;overflow:hidden;position:relative"><div class="vt">ขีด /ช่องเอกสารที่ส่ง</div></td>
    <td class="c b" style="font-size:10.5pt">หมายเหตุ</td><td class="c b" style="font-size:10.5pt">เอกสารส่วนที่</td></tr>
  {''.join(rows)}
  <tr><td colspan="5" style="font-size:6.3pt;color:#C00;font-weight:700">เอกสาร Job จัดสรร Core &nbsp; 1.บัญชี (ข้อ 1, 2, 3) &nbsp;2.Outside Plant (ข้อ 1, 3, 4, 6, 7, 8, Joint Map, Core Management, CD Soft File)</td></tr>
@@ -249,7 +251,7 @@ def page_inspection(job, company, logo_l, logo_r):
             return '<td></td><td></td><td></td><td></td>'
         no, text, k = item
         if no:
-            return f'<td class="c cy">{no}</td><td class="c b cy">{text}</td><td class="cy"></td><td class="cy"></td>'
+            return f'<td class="c cy">{no}</td><td class="c b cy">{text}</td><td></td><td></td>'
         t = "/" if k else ""
         return f'<td></td><td>{text}</td><td class="c">{t}</td><td class="c">{t}</td>'
     body = []
@@ -257,7 +259,7 @@ def page_inspection(job, company, logo_l, logo_r):
         L = INSPECT_L[i] if i < len(INSPECT_L) else None
         R = INSPECT_R[i] if i < len(INSPECT_R) else None
         if L is None:
-            Lc = (f'<td colspan="4" rowspan="{n - i}" class="c b" style="font-size:7.5pt">ผ่านให้ขีด ✓, ไม่ผ่านให้ขีด ✗ ในช่อง , ขีด - คือไม่ได้ใช้ในการติดตั้งเส้นทางนี้</td>'
+            Lc = (f'<td colspan="4" rowspan="{n - i}" class="c b cy" style="font-size:7.5pt">ผ่านให้ขีด ✓, ไม่ผ่านให้ขีด ✗ ในช่อง , ขีด - คือไม่ได้ใช้ในการติดตั้งเส้นทางนี้</td>'
                   if i == len(INSPECT_L) else "")
         else:
             Lc = cells(L)
@@ -269,27 +271,31 @@ def page_inspection(job, company, logo_l, logo_r):
    <div style="width:80pt;padding-left:6pt">{f'<img src="{_uri(logo_l)}" style="height:15pt">' if logo_l else ''}</div>
    <div style="flex:1;text-align:center;font-size:7.5pt;font-weight:700">สรุปผลการตรวจรับการติดตั้ง OPTICAL FIBER CABLE</div>
    <div style="width:80pt;text-align:right;padding-right:4pt">{f'<img src="{_uri(logo_r)}" style="height:15pt">' if logo_r else ''}</div></div></td></tr>
- <tr><td colspan="3" class="c cy" style="height:34pt">บริษัทผู้รับเหมา (CONTRACTOR)</td><td class="c cy">ชื่อ Link :</td>
-   <td colspan="4" class="c" style="font-size:9.5pt">{esc(job['link_name'])}</td></tr>
- <tr><td colspan="3" class="c" style="height:30pt">{esc(company.get('name'))}</td><td class="c">Project :</td>
-   <td colspan="2" style="white-space:normal;font-size:6pt"><span>{esc(f.get('inspect_project'))}</span> <b style="margin-left:6pt">ชนิด OFC</b> <span style="font-size:5.5pt">({esc(f.get('ofc'))})</span></td>
-   <td class="c">SAP No.</td><td>{esc(f.get('sap_no'))}</td></tr>
+ <tr><td colspan="2" class="c cy" style="height:34pt">บริษัทผู้รับเหมา (CONTRACTOR)</td><td class="c cy">ชื่อ Link :</td>
+   <td colspan="5" class="c" style="font-size:9.5pt">{esc(job['link_name'])}</td></tr>
+ <tr><td colspan="2" class="c" style="height:30pt">{esc(company.get('name'))}</td><td class="c cy">Project :</td>
+   <td colspan="5" style="padding:0"><table style="width:100%;height:30pt;border-collapse:collapse;table-layout:fixed"><tr>
+     <td style="height:30pt;width:96pt;border:none;border-right:0.6pt solid #000;font-size:5.8pt;white-space:normal" class="c">{esc(f.get('inspect_project'))}</td>
+     <td style="height:30pt;width:38pt;border:none;border-right:0.6pt solid #000" class="c b cy">ชนิด OFC</td>
+     <td style="height:30pt;width:90pt;border:none;border-right:0.6pt solid #000;font-size:5.5pt;white-space:normal" class="c">({esc(f.get('ofc'))})</td>
+     <td style="height:30pt;width:38pt;border:none;border-right:0.6pt solid #000" class="c cy">SAP No.</td>
+     <td style="height:30pt;border:none" class="c">{esc(f.get('sap_no'))}</td></tr></table></td></tr>
  <tr><td class="c cy">ลำดับ</td><td class="c b cy">รายละเอียด</td><td class="c cy" style="font-size:5.3pt;line-height:1.2;white-space:normal">ผู้รับเหมา<br>Sub-Contractor</td><td class="c cy" style="font-size:5.3pt;line-height:1.2;white-space:normal">เจ้าหน้าที่<br>Contractor</td>
    <td class="c cy">ลำดับ</td><td class="c b cy">รายละเอียด</td><td class="c cy" style="font-size:4.6pt;line-height:1.2;white-space:normal">ผู้รับเหมา<br>Sub-Contractor</td><td class="c cy" style="font-size:4.6pt;line-height:1.2;white-space:normal">เจ้าหน้าที่<br>Contractor</td></tr>
  {''.join(body)}
 </table>
-<table class="g"><colgroup><col style="width:38pt"><col></colgroup>
- <tr><td class="b" style="vertical-align:top;height:16pt;border-bottom:none">หมายเหตุ</td><td style="border-top:none;border-right:none"></td></tr>
- {''.join('<tr><td style="border-top:none;border-bottom:none;height:15pt"></td><td></td></tr>' for _ in range(4))}
-</table>
+<div style="border:0.6pt solid #000;border-top:none;padding:2pt 3pt 8pt;position:relative">
+ <span class="b" style="position:absolute;left:3pt;top:4pt">หมายเหตุ</span>
+ {''.join('<div style="margin-left:40pt;border-bottom:0.6pt solid #000;height:15pt"></div>' for _ in range(5))}
+</div>
 <table class="g"><colgroup><col style="width:21pt"><col style="width:285pt"><col style="width:42pt"><col style="width:60pt"><col style="width:58pt"><col style="width:83pt"></colgroup>
- <tr><td colspan="6" class="c cy">Comment &nbsp;Sheet</td></tr>
- <tr><td rowspan="2" class="c cy">ลำดับที่</td><td rowspan="2" class="c b cy">รายละเอียด</td><td class="c cy">กำหนดเสร็จ</td><td colspan="2" class="c b cy">ตรวจงานแก้ไข</td><td rowspan="2" class="c b cy">ผู้ตรวจสอบ</td></tr>
+ <tr><td colspan="6" class="c">Comment &nbsp;Sheet</td></tr>
+ <tr><td rowspan="2" class="c cy" style="white-space:normal;line-height:1.5">ลำดับ<br>ที่</td><td rowspan="2" class="c b cy">รายละเอียด</td><td class="c cy">กำหนดเสร็จ</td><td colspan="2" class="c b cy">ตรวจงานแก้ไข</td><td rowspan="2" class="c b cy">ผู้ตรวจสอบ</td></tr>
  <tr><td class="c cy">วันที่</td><td class="c cy">ผลการตรวจ</td><td class="c cy">วันที่</td></tr>
  {cm}
 </table>
 <table class="g sig" style="margin-top:2pt"><colgroup><col style="width:38pt"><col><col><col><col></colgroup>
- <tr><td class="c cy" style="height:22pt">สำหรับ</td><td class="c b cy">Sub Contractor</td><td class="c b cy">Name of Contractor  Inspector</td><td class="c b cy">Name of Contractor Manager</td><td class="c b cy">True  Inspector</td></tr>
+ <tr><td class="c cy" style="height:22pt;border-bottom:1.4pt solid #E00">สำหรับ</td><td class="c b cy" style="border-bottom:1.4pt solid #E00">Sub Contractor</td><td class="c b cy" style="border-bottom:1.4pt solid #E00">Name of Contractor  Inspector</td><td class="c b cy" style="border-bottom:1.4pt solid #E00">Name of Contractor Manager</td><td class="c b cy" style="border-bottom:1.4pt solid #E00">True  Inspector</td></tr>
  <tr><td class="r" style="height:26pt">ลายเซ็น :</td><td class="c">{sub['img']}</td><td class="c">{insp['img']}</td><td class="c">{mgr['img']}</td><td></td></tr>
  <tr><td class="r" style="height:22pt">ชื่อ :</td><td class="c" style="font-size:9pt">{esc(sub['name'])}</td><td class="c" style="font-size:9pt">{esc(insp['name'])}</td><td class="c" style="font-size:9pt">{esc(mgr['name'])}</td><td></td></tr>
  <tr><td class="r" style="height:20pt">วันที่ :</td><td class="c">{esc(sub['date'])}</td><td class="c">{esc(insp['date'])}</td><td class="c">{esc(mgr['date'])}</td><td></td></tr>
@@ -312,12 +318,12 @@ def page_linkbudget(job, logo_l):
     def line(label, val, unit, bg="", note=""):
         return (f'<tr><td style="width:240pt">{label}</td><td style="width:20pt" class="c">=</td>'
                 f'<td style="width:50pt;border-bottom:0.6pt solid #000;{bg}" class="c">{val}</td><td style="width:40pt">&nbsp;{unit}</td>'
-                f'<td style="color:#C00;font-weight:700;font-size:7pt">{note}</td></tr>')
+                f'<td style="color:#C00;font-weight:700;font-size:6.5pt;white-space:nowrap">{note}</td></tr>')
     p1 = "".join([
         line("L &nbsp;= ความยาวของ Optical Fiber", _n(lb["L"], 3), "Km.", hl, "ระยะจาก OTDR"),
         line("aF = ค่า Attenuation ของ fiber", _n(lb["aF"]), "dB/Km."),
         line("NE = จำนวนของจุด splice ไม่รวมใน ODF", _n(lb["NE"]), "Point", hl),
-        line("aE &nbsp;= ค่าเฉลี่ยของ attenuation ของจุด Splice รวมกันทุกจุด", _n(lb["aE"]), "dB"),
+        line("aE &nbsp;= ค่าเฉลี่ยของ attenuation ของจุด Splice รวมกันทุกจุด", f'<span style="color:#C00">{_n(lb["aE"])}</span>', "dB", "", "กำหนดค่า ใหม่เป็น 0.15"),
         line("NC = จำนวนของ Connector", _n(lb["NC"]), "Point", hl),
         line("aC &nbsp;= ค่าเฉลี่ยของ attenuation ต่อ connector รวม Splice ใน ODF", _n(lb["aC"]), "dB")])
     p2 = "".join([
@@ -331,7 +337,8 @@ def page_linkbudget(job, logo_l):
     wl = esc(f.get("lb_wavelength") or "1550")
     return f"""<div class="pg"><div class="frame" style="left:109pt;top:61pt;width:466pt;height:655pt;font-size:7.6pt">
   <div style="height:45pt;background:#00FFFF;border-bottom:1.2pt solid #000;position:relative">
-    <div style="position:absolute;left:4pt;top:14pt;font-weight:700;font-size:9pt">8.2 OPTICAL FIBER LINK BUDGET</div>{img}</div>
+    <div style="position:absolute;left:0;width:300pt;text-align:right;top:14pt;font-weight:700;font-size:9pt">8.2 OPTICAL FIBER LINK BUDGET</div>
+    <div style="position:absolute;left:312pt;top:14pt;font-size:8pt;color:#333">◯ TICC &nbsp; ◯ TUC &nbsp; ◯ ______</div>{img}</div>
   <div style="text-align:right"><span style="background:#00B0F0;font-weight:700;font-size:6pt;padding:2pt 8pt;display:inline-block">PAT Doc. Version: 6.0</span></div>
   <table style="margin:4pt 0 0 60pt;border-collapse:collapse">
     <tr><td style="text-align:right;padding:2pt 6pt">Link : Name of station &nbsp;A :</td><td style="border-bottom:0.6pt solid #000;width:200pt">{esc(s2)}</td></tr>
@@ -349,6 +356,27 @@ def page_linkbudget(job, logo_l):
 # ================================================================ Deficiency
 
 
+def _def_date(f):
+    """วันที่หน้า Deficiency = วันที่ลงนาม (Manager > Inspector > Sub > ผู้ส่ง) + 5 วัน; กรอก def_date เองได้"""
+    from datetime import date, timedelta
+    if (f.get("def_date") or "").strip():
+        return esc(f["def_date"].strip())
+    for role in ("mgr", "insp", "sub", "sender"):
+        m = re.match(r"\s*(\d{1,2})\D(\d{1,2})\D(\d{2,4})\s*$", f.get(f"sig_{role}_date") or "")
+        if not m:
+            continue
+        d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if y < 100:
+            y += 2500
+        be = y > 2400
+        try:
+            t = date(y - 543 if be else y, mo, d) + timedelta(days=5)
+        except ValueError:
+            continue
+        return f"{t.day:02d}-{t.month:02d}-{t.year + 543 if be else t.year}"
+    return "................./................../................."
+
+
 def page_deficiency(job, company, logo_l):
     f = job["fields"]
     mgr = _sig(f, "mgr")
@@ -357,14 +385,14 @@ def page_deficiency(job, company, logo_l):
     subname = f.get("def_subcon") or company.get("name")
     return f"""<div class="pg"><div class="abs" style="left:41pt;top:39pt;width:536pt;font-size:6pt">
   <div style="height:6pt;background:#FFFF00;position:relative">{img}</div>
-  <div class="c b" style="font-size:8.5pt;line-height:2.2;margin-top:6pt">DEFFICIENCY LIST FOR PHYSICAL (ODN)<br>Region {esc(f.get('def_region') or f.get('region'))}<br>{esc(job['link_name'])}<br>
-    Date ................./................../.................<br>Sub-Contractor name : {esc(subname)}</div>
+  <div class="c b" style="font-size:10pt;line-height:2.1;margin-top:6pt">DEFFICIENCY LIST FOR PHYSICAL (ODN)<br>Region {esc(f.get('def_region') or f.get('region'))}<br>{esc(job['link_name'])}<br>
+    Date {_def_date(f)}<br>Sub-Contractor name : {esc(subname)}</div>
   <div class="r b" style="margin:4pt 30pt 6pt 0">PAT Doc. Version <span style="margin-left:24pt">3.0</span></div>
   <table class="g"><colgroup><col style="width:35pt"><col style="width:46pt"><col><col style="width:132pt"></colgroup>
     <tr><th class="c b">Item</th><th class="c b">Category</th><th class="c b">Description</th><th class="c b">Clear / Acknowledgement</th></tr>{rows}</table>
   <div class="b" style="margin-top:2pt">Remark</div>
   <div style="font-size:4.8pt">กรณีมี DEFFICIENCY ให้ถ่ายรูปก่อนการแก้ไข ทุกหัวข้อ เพราะต้องไปใส่ลงใน แบบฟอร์มการแก้ไขข้อบกพร่อง (Deficiencies Clearance Form) &nbsp; หน้า P.32 ด้วย</div>
-  <table class="g sig" style="margin-top:6pt;font-size:5.5pt"><colgroup><col style="width:81pt"><col style="width:132pt"><col style="width:132pt"><col></colgroup>
+  <table class="g sig" style="margin-top:6pt;font-size:5.5pt;border:1.4pt solid #000"><colgroup><col style="width:81pt"><col style="width:132pt"><col style="width:132pt"><col></colgroup>
     <tr class="pk"><td class="r b">สำหรับ</td><td class="c b">Contractor</td><td colspan="2" class="c b" style="color:#C00">True Inspector Approve</td></tr>
     <tr class="pk"><td class="r b">Department</td><td class="c b">{esc(company.get('name'))}</td><td class="c b">Online Implementation</td><td class="c b">Network Operation (NOP)</td></tr>
     <tr><td class="r b" style="height:20pt">ลายเซ็น</td><td class="c">{mgr['img']}</td><td></td><td></td></tr>

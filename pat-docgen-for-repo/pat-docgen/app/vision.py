@@ -64,9 +64,10 @@ def _parse_json(text):
 
 
 def classify(photos, examples=None, batch=8):
-    """photos: [(id, path)]  examples: [(kind, path)]
-    คืน (results{id: {kind, conf, lat, lon, taken}}, usage{in, out, usd})"""
+    """photos: [(id, path)] หรือ [(id, path, folder)]  examples: [(kind, path)]
+    คืน (results{id: {kind, conf, lat, lon, taken}}, usage{in, out, usd, errors})"""
     examples = examples or []
+    LAST_ERRORS.clear()
     ex_content = []
     if examples:
         ex_content.append({"type": "text", "text": "รูปตัวอย่างที่คนจัดไว้แล้ว (ใช้เทียบ):"})
@@ -82,14 +83,19 @@ def classify(photos, examples=None, batch=8):
         f"ประเภทรูป:\n{kinds_txt}\n\n"
         "สำหรับรูปเป้าหมายแต่ละรูป (ระบุด้วย id) ให้ตอบ JSON array เท่านั้น เช่น "
         '[{"id":"..","kind":"odf_rack","conf":0.9,"lat":17.97,"lon":100.05,"taken":"2026-09-10 11:40"}]\n'
-        "lat/lon/taken ให้อ่านจากตัวหนังสือที่แอปกล้องพิมพ์ไว้บนรูป (มักเป็นสีส้มหรือสีขาว มุมขวาบน/ขวาล่าง) ถ้าอ่านไม่ได้ให้ใส่ null"
+        "lat/lon/taken ให้อ่านจากตัวหนังสือที่แอปกล้องพิมพ์ไว้บนรูป (มักเป็นสีส้มหรือสีขาว มุมขวาบน/ขวาล่าง) ถ้าอ่านไม่ได้ให้ใส่ null\n"
+        "ชื่อโฟลเดอร์ที่แนบมาเป็นแค่คำใบ้: โฟลเดอร์ชื่อสถานี (เช่น PHE1149) มักมีรูป site_location/odf_rack/core_label, "
+        "โฟลเดอร์ PlugPort มักมี equipment_port/odf_rack/core_label, โฟลเดอร์ SJ#/BJ# เป็นรูป closure, โฟลเดอร์ Power เป็น power_meter หรือ otdr_screen\n"
+        "ถ้ามีรูปตัวอย่าง ให้เทียบกับรูปตัวอย่างเป็นหลัก conf คือความมั่นใจ 0-1 ตามจริง"
     )
     results, tin, tout = {}, 0, 0
 
     def run(chunk):
         content = list(ex_content) + [{"type": "text", "text": instr}]
-        for pid, path in chunk:
-            content.append({"type": "text", "text": f"id={pid}"})
+        for item in chunk:
+            pid, path = item[0], item[1]
+            folder = item[2] if len(item) > 2 else ""
+            content.append({"type": "text", "text": f"id={pid} โฟลเดอร์={folder}"})
             content.append({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": _b64(path, 768)}})
         return _call(content)
 
@@ -105,7 +111,7 @@ def classify(photos, examples=None, batch=8):
                 if isinstance(r, dict) and r.get("id") and r.get("kind") in KINDS:
                     results[str(r["id"])] = r
     usd = tin / 1e6 * PRICE_IN + tout / 1e6 * PRICE_OUT
-    return results, {"in": tin, "out": tout, "usd": round(usd, 4)}
+    return results, {"in": tin, "out": tout, "usd": round(usd, 4), "errors": sorted(set(LAST_ERRORS))}
 
 
 def read_text(path, question, side=1600):
@@ -116,9 +122,26 @@ def read_text(path, question, side=1600):
     return out[0] if out else ""
 
 
+LAST_ERRORS = []
+
+
+def _explain(e):
+    if isinstance(e, urllib.error.HTTPError):
+        try:
+            body = json.loads(e.read().decode())
+            msg = body.get("error", {}).get("message", "")
+        except Exception:
+            msg = ""
+        hint = {401: "API key ไม่ถูกต้อง", 403: "API key ไม่มีสิทธิ์ใช้งาน", 404: f"ไม่พบโมเดล {MODEL}",
+                429: "เรียกถี่เกินไป/โควตาเต็ม", 400: "คำขอไม่ถูกต้อง (อาจเครดิตไม่พอ)", 529: "ระบบ AI ไม่ว่างชั่วคราว"}.get(e.code, "")
+        return f"HTTP {e.code} {hint} {msg}".strip()
+    return str(e)
+
+
 def _safe(fn, arg):
     try:
         return fn(arg)
-    except (urllib.error.URLError, OSError, ValueError, KeyError) as e:  # pragma: no cover
-        print("vision error:", e)
+    except Exception as e:  # pragma: no cover
+        LAST_ERRORS.append(_explain(e))
+        print("vision error:", LAST_ERRORS[-1])
         return None
