@@ -181,7 +181,7 @@
     {% if can %}
     <form method="post" action="{{ url_for('main.job_generate', job_id=job.id) }}" data-busy style="margin-top:12px">
       <input type="hidden" name="_csrf" value="{{ csrf }}">
-      <button class="btn pri big" type="submit" style="width:100%">สร้าง PAT + AS-BUILT</button>
+      <button class="btn pri big" type="submit" style="width:100%">สร้าง PAT + AS-BUILT (PDF + Excel)</button>
     </form>
     {% endif %}
   </section>
@@ -190,14 +190,15 @@
     <h2>เอกสารที่สร้างแล้ว</h2>
     {% for d in docs %}
       <div style="border-top:1px solid #F1F5F9;padding:8px 0;font-size:14px">
-        <b>{{ 'PAT' if d.kind=='PAT' else 'AS-BUILT' }} v{{ d.version }}</b> · {{ d.pages }} หน้า · {{ (d.size/1048576)|round(1) }} MB
+        {% set xl = d.filename.endswith('.xlsx') %}
+        <b>{{ 'PAT' if d.kind=='PAT' else 'AS-BUILT' }} v{{ d.version }}</b> <span class="badge {{ 'b-green' if xl else 'b-amber' }}">{{ 'Excel' if xl else 'PDF' }}</span> · {{ d.pages }} {{ 'ชีต' if xl else 'หน้า' }} · {{ (d.size/1048576)|round(1) }} MB
         <div class="sub">{{ d.creator.name if d.creator }} · {{ d.created_at|th }}</div>
-        <a class="btn sm" href="{{ url_for('main.doc_download', doc_id=d.id) }}?inline=1" target="_blank" rel="noopener">เปิดดู</a>
+        {% if not xl %}<a class="btn sm" href="{{ url_for('main.doc_download', doc_id=d.id) }}?inline=1" target="_blank" rel="noopener">เปิดดู</a>{% endif %}
         <a class="btn sm" href="{{ url_for('main.doc_download', doc_id=d.id) }}">ดาวน์โหลด</a>
         {% if can %}<form method="post" action="{{ url_for('main.doc_delete', doc_id=d.id) }}" style="display:inline" onsubmit="return confirm('ลบไฟล์นี้?')"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="btn sm" type="submit">ลบ</button></form>{% endif %}
       </div>
     {% else %}<div class="sub">ยังไม่ได้สร้าง</div>{% endfor %}
-    {% if can and docs|length > 2 %}<form method="post" action="{{ url_for('main.docs_clear', job_id=job.id) }}" style="margin-top:8px" onsubmit="return confirm('ลบ PDF เวอร์ชันเก่าทั้งหมด เก็บเฉพาะล่าสุด?')"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="keep_latest" value="1"><button class="btn sm" type="submit">ลบเวอร์ชันเก่า เก็บเฉพาะล่าสุด</button></form>{% endif %}
+    {% if can and docs|length > 4 %}<form method="post" action="{{ url_for('main.docs_clear', job_id=job.id) }}" style="margin-top:8px" onsubmit="return confirm('ลบไฟล์เวอร์ชันเก่าทั้งหมด เก็บเฉพาะล่าสุด?')"><input type="hidden" name="_csrf" value="{{ csrf }}"><input type="hidden" name="keep_latest" value="1"><button class="btn sm" type="submit">ลบเวอร์ชันเก่า เก็บเฉพาะล่าสุด</button></form>{% endif %}
   </section>
 
   <section class="card">

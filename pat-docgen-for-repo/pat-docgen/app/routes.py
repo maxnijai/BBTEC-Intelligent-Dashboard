@@ -1075,6 +1075,15 @@ def job_generate(job_id):
         current_app.logger.exception("generate failed")
         flash(f"สร้าง PDF ไม่สำเร็จ: {e}", "error")
         return redirect(url_for("main.job_view", job_id=job.id))
+    xl = []
+    try:
+        from . import xlsxgen
+        args = (jobd, comp, pages, by_slot, company.template_logo_path or None, company.logo_path or None,
+                sheet_bytes, job.j("sheet_cfg", {}), sors)
+        xl = [("PAT", "PAT_") + xlsxgen.build_xlsx(*args), ("ASBUILT", "PATAS-BUILT_") + xlsxgen.build_xlsx(*args, asbuilt_pdfs=asb)]
+    except Exception as e:
+        current_app.logger.exception("xlsx failed")
+        flash(f"สร้าง Excel ไม่สำเร็จ (PDF ใช้ได้ตามปกติ): {e}", "error")
     ver = (db.session.query(func.max(Document.version)).filter_by(job_id=job.id).scalar() or 0) + 1
     d = os.path.join(job_dir(job), "out")
     os.makedirs(d, exist_ok=True)
@@ -1086,12 +1095,19 @@ def job_generate(job_id):
             fh.write(data)
         db.session.add(Document(job_id=job.id, kind=kind, version=ver, filename=fn, path=path,
                                 pages=pdfgen.count_pages(data), size=len(data), created_by=current_user.id))
+    for kind, prefix, data, npages in xl:
+        fn = f"{prefix}{base}.xlsx"
+        path = os.path.join(d, f"v{ver}_{fn}")
+        with open(path, "wb") as fh:
+            fh.write(data)
+        db.session.add(Document(job_id=job.id, kind=kind, version=ver, filename=fn, path=path,
+                                pages=npages, size=len(data), created_by=current_user.id))
     if job.status in ("draft", "rejected"):
         job.status = "ready"
     job.updated_by = current_user.id
-    log("generate", f"สร้าง PDF v{ver}: PAT {pdfgen.count_pages(pat)} หน้า, AS-BUILT {pdfgen.count_pages(asbuilt)} หน้า", job)
+    log("generate", f"สร้าง PDF{' + Excel' if xl else ''} v{ver}: PAT {pdfgen.count_pages(pat)} หน้า, AS-BUILT {pdfgen.count_pages(asbuilt)} หน้า", job)
     db.session.commit()
-    flash(f"สร้าง PDF v{ver} เรียบร้อย", "ok")
+    flash(f"สร้าง PDF{' + Excel' if xl else ''} v{ver} เรียบร้อย", "ok")
     return redirect(url_for("main.job_view", job_id=job.id) + "#docs")
 
 
@@ -1100,8 +1116,12 @@ def job_generate(job_id):
 def doc_download(doc_id):
     d = db.session.get(Document, doc_id) or abort(404)
     job = get_job(d.job_id)
-    log("download", f"ดาวน์โหลด {d.kind} v{d.version}", job)
+    xlsx = d.filename.lower().endswith(".xlsx")
+    log("download", f"ดาวน์โหลด {d.kind} v{d.version}{' (Excel)' if xlsx else ''}", job)
     db.session.commit()
+    if xlsx:
+        return send_file(d.path, as_attachment=True, download_name=d.filename,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     return send_file(d.path, as_attachment=request.args.get("inline") != "1", download_name=d.filename,
                      mimetype="application/pdf")
 
