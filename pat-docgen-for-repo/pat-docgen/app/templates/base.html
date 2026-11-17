@@ -17,23 +17,25 @@
     {% if current_user.can_edit() %}<a href="{{ url_for('main.job_new') }}" class="{{ 'on' if ep=='main.job_new' }}">+ สร้างงานใหม่</a>{% endif %}
     {% block navjob %}{% endblock %}
     <div class="sep"></div>
-    <a href="{{ url_for('main.audit') }}" class="{{ 'on' if ep=='main.audit' }}">Audit log</a>
+    <div class="navcap">จัดการ</div>
+    <a href="{{ url_for('main.audit') }}" class="{{ 'on' if ep=='main.audit' }}">ประวัติการใช้งาน</a>
     {% if current_user.role in ('superadmin','admin') %}
     <a href="{{ url_for('main.users') }}" class="{{ 'on' if ep=='main.users' }}">ผู้ใช้งาน</a>
     <a href="{{ url_for('main.companies') }}" class="{{ 'on' if ep=='main.companies' }}">{{ 'บริษัท' if current_user.is_super else 'ข้อมูลบริษัท / โลโก้' }}</a>
     {% endif %}
     <a href="{{ url_for('main.profile') }}" class="{{ 'on' if ep=='main.profile' }}">โปรไฟล์ / ลายเซ็นของฉัน</a>
-    <div class="who"><b>{{ current_user.name }}</b><br>{{ current_user.company.name if current_user.company else 'BBTEC (ทุกบริษัท)' }}<br>{{ current_user.role }}
+    <div class="who"><b>{{ current_user.name }}</b><br>{{ current_user.company.name if current_user.company else 'BBTEC (ทุกบริษัท)' }}<br>{{ ROLE_TH.get(current_user.role, current_user.role) }}
       <form method="post" action="{{ url_for('main.logout') }}"><input type="hidden" name="_csrf" value="{{ csrf }}"><button class="lo" type="submit">ออกจากระบบ</button></form>
     </div>
   </nav>
   <main>
-    {% with msgs = get_flashed_messages(with_categories=true) %}{% for c, m in msgs %}<div class="flash {{ c }}">{{ m }}</div>{% endfor %}{% endwith %}
+    <div class="toasts" id="toasts">{% with msgs = get_flashed_messages(with_categories=true) %}{% for c, m in msgs %}<div class="toast {{ c }}" role="status"><span>{{ m }}</span><button type="button" aria-label="ปิด" onclick="this.parentNode.remove()">✕</button></div>{% endfor %}{% endwith %}</div>
     {% block main %}{% endblock %}
   </main>
 </div>
 <div class="busy" id="busy">กำลังประมวลผล… อย่าปิดหน้านี้</div>
 <script>
+setTimeout(()=>document.querySelectorAll('.toast.ok').forEach(t=>t.remove()),7000);
 // ฟอร์มที่มีไฟล์: อัปโหลดแบบมีแถบความคืบหน้า แล้วแสดงหน้าผลลัพธ์
 const busy=document.getElementById('busy');
 const mb=n=>(n/1048576).toFixed(1);

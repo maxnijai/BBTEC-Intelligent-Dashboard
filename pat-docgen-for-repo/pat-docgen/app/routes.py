@@ -11,7 +11,7 @@ from flask import (Blueprint, abort, current_app, flash, jsonify, redirect, rend
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy import func, or_
 
-from . import pdfgen, vision
+from . import pdfgen, present, vision
 from .importer import (KIND_TH, REVIEW_BELOW, auto_assign, dhash, hamming, features, fiber_length_from_images, haversine, norm_closure,
                        ocr_latlon, photo_time_key, run_import, slot_kind)
 from .sorfile import parse_sor
@@ -119,26 +119,33 @@ def dashboard():
     aq = Audit.query
     if not current_user.is_super:
         aq = aq.filter(Audit.company_id == current_user.company_id)
-    recent = aq.filter(~Audit.action.in_(["login", "logout", "download"])).order_by(Audit.created_at.desc()).limit(8).all()
+    recent = present.timeline(aq.filter(~Audit.action.in_(["login", "logout", "download", "kmz"]))
+                              .order_by(Audit.created_at.desc()).limit(120).all())[:8]
+    rjobs = {j.id: j for j in Job.query.filter(Job.id.in_({r["job_id"] for r in recent if r["job_id"]})).all()}
     companies = Company.query.order_by(Company.name).all() if current_user.is_super else []
     return render_template("dashboard.html", rows=rows, counts=counts, total=sum(counts.values()), st=st, term=term,
-                           STATUS=STATUS, by_user=by_user, recent=recent, companies=companies, cid=cid)
+                           STATUS=STATUS, by_user=by_user, recent=recent, rjobs=rjobs, companies=companies, cid=cid)
 
 # ---------------------------------------------------------------- job create / edit
 
 
 FIELD_FORM = [
-    ("ข้อมูลหน้าปก / หน้ารายการเอกสาร / หน้าสรุปผลตรวจรับ", [
-        ("sap_no", "SAP No. / SAP Job No."), ("or_no", "OR No."), ("ofc", "OFC (เช่น 12C FIG.8,60C ARSS)"), ("core", "Core"),
-        ("project", "Project (หน้าปก)"), ("inspect_project", "Project (หน้าสรุปผลตรวจรับ)"), ("region", "Region"), ("activity", "Activity")]),
-    ("หน้ารูป", [("equip1", "อุปกรณ์ Site 1 (เช่น CX600)"), ("equip2", "อุปกรณ์ Site 2 (เช่น CPE)"),
+    ("ข้อมูลทั่วไป", [
+        ("sap_no", "SAP No. — ใช้ในหน้าปก รายการเอกสาร และสรุปผลตรวจรับ"), ("or_no", "OR No."),
+        ("ofc", "OFC — เช่น 12C FIG.8,60C ARSS"), ("core", "Core"),
+        ("project", "Project — หน้าปก"), ("region", "Region"), ("activity", "Activity"),
+        ("inspect_project", "Project — หน้าสรุปผลตรวจรับ")]),
+    ("หน้ารูป", [("equip1", "อุปกรณ์ Site 1 — เช่น CX600"), ("equip2", "อุปกรณ์ Site 2 — เช่น CPE"),
                  ("power_core1", "Test Power Core (1)"), ("power_core2", "Test Power Core (2)"),
-                 ("closures", "ลำดับหัวต่อ (ว่าง = อ่านจาก KMZ/โฟลเดอร์)")]),
-    ("Link Budget", [("lb_L", "L ความยาว (Km.) — จาก .sor / รูป OTDR"), ("lb_aF", "aF (dB/Km.)"), ("lb_NE", "NE — นับจากโฟลเดอร์หัวต่อ"),
-                     ("lb_aE", "aE (dB)"), ("lb_NC", "NC จำนวน Connector"), ("lb_aC", "aC (dB)"),
-                     ("lb_otdr_max", "OTDR Max (dB) — ค่า Fix 4.60"), ("lb_otdr_min", "OTDR Min (dB) — ค่า Fix 4.44"), ("lb_note", "หมายเหตุ")]),
-    ("หน้า Deficiency", [("def_region", "Region (เช่น UPC1)"), ("def_date", "Date (ว่าง = วันที่ลงนาม Manager + 5 วัน)"), ("def_subcon", "Sub-Contractor name (ว่าง = ชื่อบริษัท)")]),
+                 ("closures", "ลำดับหัวต่อ — เว้นว่างเพื่ออ่านจาก KMZ / โฟลเดอร์")]),
+    ("Link Budget", [("lb_L", "L ความยาว (Km.) — อ่านจากไฟล์ .sor ให้อัตโนมัติ"), ("lb_NE", "NE จำนวนจุด splice — นับจากโฟลเดอร์หัวต่อ"),
+                     ("lb_note", "หมายเหตุ"),
+                     ("lb_aF", "aF (dB/Km.)"), ("lb_aE", "aE (dB)"), ("lb_NC", "NC จำนวน Connector"), ("lb_aC", "aC (dB)"),
+                     ("lb_otdr_max", "OTDR Max (dB) — ค่ากำหนด 4.60"), ("lb_otdr_min", "OTDR Min (dB) — ค่ากำหนด 4.44")]),
+    ("หน้า Deficiency", [("def_region", "Region — เช่น UPC1"), ("def_date", "Date — เว้นว่าง = วันที่ลงนาม Manager + 5 วัน"),
+                         ("def_subcon", "Sub-Contractor name — เว้นว่าง = ชื่อบริษัท")]),
 ]
+ADVANCED = {"inspect_project", "closures", "lb_aF", "lb_aE", "lb_NC", "lb_aC", "lb_otdr_max", "lb_otdr_min", "def_date", "def_subcon"}
 
 
 @bp.route("/jobs/new", methods=["GET", "POST"])
@@ -180,10 +187,10 @@ def job_view(job_id):
     f = {**DEFAULT_FIELDS, **job.fields}
     docs = Document.query.filter_by(job_id=job.id).order_by(Document.created_at.desc()).all()
     atts = Attachment.query.filter_by(job_id=job.id).order_by(Attachment.created_at).all()
-    hist = Audit.query.filter_by(job_id=job.id).order_by(Audit.created_at.desc()).limit(60).all()
+    hist = present.timeline(Audit.query.filter_by(job_id=job.id).order_by(Audit.created_at.desc()).limit(400).all())
     s1, s2 = sites_from_link(job.link_name)
-    checks = run_checks(job, pages, f, atts)
-    return render_template("job.html", job=job, f=f, FIELD_FORM=FIELD_FORM, prog=prog, docs=docs, atts=atts, hist=hist,
+    checks = [(lvl, msg, present.check_target(msg)) for lvl, msg in run_checks(job, pages, f, atts)]
+    return render_template("job.html", job=job, f=f, FIELD_FORM=FIELD_FORM, ADVANCED=ADVANCED, prog=prog, docs=docs, atts=atts, hist=hist,
                            STATUS=STATUS, s1=s1, s2=s2, lb=link_budget(f), checks=checks, SIG_ROLES=SIG_ROLES,
                            sheet_cfg=job.j("sheet_cfg", {}), kmz=job.j("kmz", []), pages=pages,
                            coords=closure_coords(job), ai=vision.enabled(),
@@ -1203,6 +1210,8 @@ def companies():
 @login_required
 def logo(cid, which):
     c = db.session.get(Company, cid) or abort(404)
+    if not current_user.is_super and c.id != current_user.company_id:
+        abort(404)
     p = c.logo_path if which == "company" else c.template_logo_path
     if not p or not os.path.exists(p):
         abort(404)
@@ -1221,9 +1230,11 @@ def audit():
     who = request.args.get("user", type=int)
     if who:
         q = q.filter(Audit.user_id == who)
-    rows = q.order_by(Audit.created_at.desc()).limit(500).all()
-    jobs = {j.id: j for j in Job.query.filter(Job.id.in_({r.job_id for r in rows if r.job_id})).all()}
-    return render_template("audit.html", rows=rows, jobs=jobs)
+    show_all = request.args.get("all") == "1"
+    raw = q.order_by(Audit.created_at.desc()).limit(800).all()
+    rows = present.timeline(raw, show_all)
+    jobs = {j.id: j for j in Job.query.filter(Job.id.in_({r["job_id"] for r in rows if r["job_id"]})).all()}
+    return render_template("audit.html", rows=rows, jobs=jobs, show_all=show_all, who=who, hidden=len(raw) - sum(r["n"] for r in rows))
 
 
 # ---------------------------------------------------------------- ลบข้อมูล / ล้างประวัติ

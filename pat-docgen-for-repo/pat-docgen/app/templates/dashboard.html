@@ -43,7 +43,7 @@
     {% for n, c in by_user %}<div class="row" style="gap:10px;margin:6px 0"><span style="width:140px">{{ n }}</span><div class="bar" style="flex:1;height:10px"><i style="height:10px;width:{{ (100*c/mx)|int }}%"></i></div><span class="sub" style="width:60px;text-align:right">{{ c }} งาน</span></div>{% else %}<div class="sub">ยังไม่มีข้อมูล</div>{% endfor %}
   </div>
   <div class="card"><h2>กิจกรรมล่าสุด</h2>
-    {% for a in recent %}<div style="font-size:14px;margin:5px 0"><b>{{ a.user.name if a.user else '-' }}</b> {{ a.detail }} <span class="sub">· {{ a.created_at|th }}</span></div>{% else %}<div class="sub">-</div>{% endfor %}
+    {% for a in recent %}<div class="tl"><span class="badge b-{{ a.tone }}">{{ a.label }}</span><span class="tl-text">{{ a.text }}{% if a.job_id and rjobs.get(a.job_id) and a.action not in ('job_create','delete') %} <span class="hint">· {{ rjobs[a.job_id].link_name }}</span>{% endif %}</span><span class="tl-user">{{ a.user }} · {{ a.when|thshort }}</span></div>{% else %}<div class="empty">ยังไม่มีกิจกรรม</div>{% endfor %}
     <a href="{{ url_for('main.audit') }}" class="sub">ดู Audit log ทั้งหมด →</a>
   </div>
 </div>

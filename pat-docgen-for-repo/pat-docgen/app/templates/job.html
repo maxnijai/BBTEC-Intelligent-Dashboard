@@ -5,9 +5,16 @@
 {% set can = current_user.can_edit(job) and not job.locked %}{% set can_wf = current_user.can_edit(job) %}
 <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
 <div style="flex:999 1 560px;min-width:0">
+  <div class="subtabs" role="tablist">
+    <a href="#data" data-pane="data">ข้อมูลเอกสาร</a>
+    <a href="#files" data-pane="files">ไฟล์ประกอบ{% if atts %} <i>{{ atts|length }}</i>{% endif %}</a>
+    <a href="#sign" data-pane="sign">ผู้ลงนาม</a>
+    <a href="#kmz" data-pane="kmz">พิกัด closure</a>
+    <a href="#hist" data-pane="hist">ประวัติ</a>
+  </div>
 
   {% if job.locked %}<div class="flash ok">งานนี้{{ 'ส่งตรวจ' if job.status=='submitted' else 'อนุมัติ' }}แล้ว — ล็อกการแก้ไข (กด “เปิดแก้ไขใหม่” ด้านขวาหากต้องแก้)</div>{% endif %}
-  <section class="card" id="import">
+  <section class="card pane" data-pane="data" id="import">
     <div class="row between"><h2 style="margin:0">Import รูป (ZIP หรือทั้งโฟลเดอร์)</h2><a href="{{ url_for('main.job_photos', job_id=job.id) }}">ไปหน้าจัดรูป →</a></div>
     {% if can %}
     <form method="post" action="{{ url_for('main.job_import', job_id=job.id) }}" enctype="multipart/form-data" data-busy style="margin-top:10px">
@@ -27,19 +34,20 @@
     {% if job.closures %}<div class="sub">หัวต่อที่ใช้ทำหน้า: {{ (f.closures or job.closures|join(', ')) }}</div>{% endif %}
   </section>
 
-  <section class="card" id="data">
+  <section class="card pane" data-pane="data" id="data">
     <h2>ข้อมูลเอกสาร</h2>
     <form method="post" action="{{ url_for('main.job_fields', job_id=job.id) }}">
       <input type="hidden" name="_csrf" value="{{ csrf }}">
       <div style="margin-bottom:10px"><label for="link_name">Link Name</label><input id="link_name" name="link_name" type="text" value="{{ job.link_name }}" {{ 'disabled' if not can }}>
         <div class="sub" style="margin-top:3px">Site 1 = {{ s1 }} · Site 2 = {{ s2 }}</div></div>
+      {% macro fld(k, lbl) %}{% set parts = lbl.split(' — ') %}<div><label for="f_{{ k }}">{{ parts[0] }}</label><input id="f_{{ k }}" name="{{ k }}" type="text" value="{{ f.get(k,'') }}" {{ 'disabled' if not can }}>{% if parts|length > 1 %}<div class="hint">{{ parts[1] }}</div>{% endif %}</div>{% endmacro %}
       {% for title, items in FIELD_FORM %}
-        <div style="font-weight:700;margin:14px 0 8px">{{ title }}</div>
-        <div class="grid g3">
-        {% for k, lbl in items %}<div><label for="f_{{ k }}">{{ lbl }}</label><input id="f_{{ k }}" name="{{ k }}" type="text" value="{{ f.get(k,'') }}" {{ 'disabled' if not can }}></div>{% endfor %}
-        </div>
+        <div class="grp">{{ title }}</div>
+        <div class="grid g3">{% for k, lbl in items if k not in ADVANCED %}{{ fld(k, lbl) }}{% endfor %}</div>
+        {% set adv = items|selectattr(0,'in',ADVANCED)|list %}
+        {% if adv %}<details class="adv"><summary>{{ 'ค่ามาตรฐาน (แก้เมื่อจำเป็น)' if title=='Link Budget' else 'ตัวเลือกเพิ่มเติม' }}</summary><div class="grid g3">{% for k, lbl in adv %}{{ fld(k, lbl) }}{% endfor %}</div></details>{% endif %}
       {% endfor %}
-      <div class="card" style="background:#F9FAFB;margin:14px 0 0">
+      <div class="lbsum">
         <div class="row" style="gap:22px;font-size:14px">
           <span>Cable <b>{{ '%.2f'|format(lb.cable) if lb.cable is not none else '-' }}</b> dB</span>
           <span>Splice <b>{{ '%.2f'|format(lb.splice) if lb.splice is not none else '-' }}</b> dB</span>
@@ -52,7 +60,7 @@
     </form>
   </section>
 
-  <section class="card" id="files">
+  <section class="card pane" data-pane="files" id="files">
     <h2>ไฟล์ประกอบ</h2>
     <div class="sub" style="margin-bottom:10px">หน้า Loss OTDR / ใบสรุปเคเบิลรื้อถอน / Balance Cable &amp; Material ยังใช้จาก Google Sheet — export เป็น PDF (ทั้งไฟล์ก็ได้) ระบบเลือกหน้าเอง · ไฟล์ .sor ใส่ใน ZIP (โฟลเดอร์ OTDR) หรืออัปโหลดตรงนี้ก็ได้</div>
     <table class="t">
@@ -87,7 +95,7 @@
     {% endif %}
   </section>
 
-  <section class="card" id="sign">
+  <section class="card pane" data-pane="sign" id="sign">
     <h2>ผู้ลงนาม (ใส่ในหน้ารายการเอกสาร / สรุปผลตรวจรับ / Deficiency)</h2>
     <div class="sub" style="margin-bottom:10px">อัปโหลดรูปลายเซ็น (PNG/JPG ถ่ายบนกระดาษขาวได้ ระบบลบพื้นขาวให้) หรือกด “ใช้ลายเซ็นของฉัน” (ตั้งได้ที่เมนู โปรไฟล์ของฉัน)</div>
     <form method="post" action="{{ url_for('main.job_signatures', job_id=job.id) }}" enctype="multipart/form-data">
@@ -126,7 +134,7 @@
     {% endif %}
   </section>
 
-  <section class="card" id="kmz">
+  <section class="card pane" data-pane="kmz" id="kmz">
     <div class="row between"><h2 style="margin:0">พิกัดจุดติดตั้ง closure (จากรูปที่ 3 ของแต่ละหัว)</h2>
       <a class="btn pri" href="{{ url_for('main.job_kmz', job_id=job.id) }}">ดาวน์โหลด KMZ</a></div>
     <form method="post" action="{{ url_for('main.job_coords', job_id=job.id) }}" style="margin-top:10px">
@@ -147,12 +155,26 @@
       {% if can %}<div class="row" style="margin-top:10px"><button class="btn" type="submit">บันทึกพิกัด</button><button class="btn" type="submit" name="reocr" value="1">อ่านพิกัดจากรูปใหม่</button></div>{% endif %}
     </form>
   </section>
+
+  <section class="card pane" data-pane="hist" id="hist">
+    <h2>ประวัติของงานนี้</h2>
+    {% for h in hist %}<div class="tl"><span class="tl-time">{{ h.when|thshort }}</span><span class="badge b-{{ h.tone }}">{{ h.label }}</span><span class="tl-text">{{ h.text }}</span><span class="tl-user">{{ h.user }}</span></div>{% else %}<div class="empty">ยังไม่มีประวัติ</div>{% endfor %}
+    <div class="hint" style="margin-top:8px">การจัดรูปที่ทำต่อเนื่องกันจะรวมเป็นบรรทัดเดียว · ดูแบบละเอียดได้ที่เมนู “ประวัติการใช้งาน”</div>
+  </section>
 </div>
 
 <aside style="flex:1 1 320px;min-width:0">
   <section class="card" id="docs">
-    <h2>ตรวจก่อนสร้าง</h2>
-    {% for lvl, msg in checks %}<div class="chk {{ lvl }}">{{ '✓' if lvl=='ok' else ('!' if lvl=='warn' else 'i') }} {{ msg }}</div>{% endfor %}
+    {% set todo = checks|selectattr(0,'equalto','warn')|list %}
+    <div class="row between"><h2 style="margin:0">ความพร้อมของเอกสาร</h2><span class="badge {{ 'b-green' if not todo else 'b-amber' }}">{{ 'พร้อมสร้าง' if not todo else 'เหลือ ' ~ todo|length ~ ' รายการ' }}</span></div>
+    <div class="checks">
+    {% for lvl, msg, tgt in checks %}{% if lvl != 'ok' %}
+      <a class="ck {{ lvl }}" href="{{ url_for('main.job_photos', job_id=job.id) if tgt=='photos' else '#' ~ tgt }}"><span class="dot"></span><span>{{ msg }}</span></a>
+    {% endif %}{% endfor %}
+    {% set oks = checks|selectattr(0,'equalto','ok')|list %}
+    {% if oks %}<details class="okd"><summary>เรียบร้อยแล้ว {{ oks|length }} รายการ</summary>{% for lvl, msg, tgt in oks %}<div class="ck ok"><span class="dot"></span><span>{{ msg }}</span></div>{% endfor %}</details>{% endif %}
+    </div>
+    {% if todo %}<div class="hint" style="margin-top:6px">สร้าง PDF ได้เลยแม้ยังไม่ครบ — รายการที่เหลือจะเว้นว่างในเอกสาร</div>{% endif %}
     {% if can %}
     <form method="post" action="{{ url_for('main.job_generate', job_id=job.id) }}" data-busy style="margin-top:12px">
       <input type="hidden" name="_csrf" value="{{ csrf }}">
@@ -189,14 +211,26 @@
     </form>
   </section>
 
-  <section class="card">
-    <h2>ประวัติ (Audit log)</h2>
-    {% for h in hist %}<div style="font-size:13px;border-top:1px solid #F1F5F9;padding:5px 0"><span class="sub">{{ h.created_at|th }}</span> · <b>{{ h.user.name if h.user }}</b> {{ h.detail }}</div>{% endfor %}
-  </section>
+
 </aside>
 </div>
 {% endblock %}
 {% block scripts %}
+<script>
+// แท็บย่อยของหน้างาน (จำแท็บล่าสุดไว้)
+(function(){
+  const map={import:'data',data:'data',files:'files',sign:'sign',kmz:'kmz',hist:'hist'};
+  function show(){
+    let h=location.hash.replace('#','');
+    let pane=map[h]||sessionStorage.getItem('pane{{ job.id }}')||'data';
+    sessionStorage.setItem('pane{{ job.id }}',pane);
+    document.querySelectorAll('.pane').forEach(p=>p.hidden=p.dataset.pane!==pane);
+    document.querySelectorAll('.subtabs a').forEach(a=>a.classList.toggle('on',a.dataset.pane===pane));
+    if(h==='docs'){const d=document.getElementById('docs'); d&&d.scrollIntoView({block:'start'})}
+  }
+  window.addEventListener('hashchange',show); show();
+})();
+</script>
 <script>
 const d=document.getElementById('drop');
 if(d){const f=d.closest('form'),inp=document.getElementById('zipf');

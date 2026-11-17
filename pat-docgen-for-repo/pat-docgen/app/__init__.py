@@ -60,6 +60,15 @@ def create_app(test_config=None):
             return ""
         return (dt + timedelta(hours=7)).strftime("%d/%m/%Y %H:%M")
 
+    from . import present
+    app.jinja_env.globals.update(ROLE_TH=present.ROLE_TH)
+
+    @app.template_filter("thshort")
+    def th_short(dt):
+        if not dt:
+            return ""
+        return (dt + timedelta(hours=7)).strftime("%d/%m %H:%M")
+
     from .routes import bp
     app.register_blueprint(bp)
 

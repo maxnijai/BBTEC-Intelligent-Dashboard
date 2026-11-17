@@ -1,27 +1,48 @@
 {% extends 'base.html' %}
-{% block title %}Audit log – PAT DocGen{% endblock %}
-{% block main %}
-<h1>Audit log</h1>
-<div class="sub" style="margin-bottom:14px">ทุกการกระทำในระบบ: ใคร ทำอะไร กับงานไหน เมื่อไร (500 รายการล่าสุด)</div>
-{% if current_user.role in ('superadmin','admin') %}
-<form method="post" action="{{ url_for('main.audit_clear') }}" class="row" style="margin-bottom:12px" onsubmit="return confirm('ล้าง Audit log ตามที่เลือก? กู้คืนไม่ได้')">
+{% block title %}Audit log – PAT DocGen{% if current_user.role in ('superadmin','admin') %}
+<details class="adv" style="margin-top:14px"><summary>ล้างประวัติ</summary>
+<form method="post" action="{{ url_for('main.audit_clear') }}" class="row" style="margin:6px 0 0" onsubmit="return confirm('ล้าง Audit log ตามที่เลือก? กู้คืนไม่ได้')">
   <input type="hidden" name="_csrf" value="{{ csrf }}">
   <label class="vh" for="sc">ขอบเขต</label>
   <select id="sc" name="scope" style="width:300px"><option value="noise">เฉพาะ login / ดาวน์โหลด / ย้ายรูป (ที่รก)</option><option value="old">ที่เก่ากว่า 30 วัน</option><option value="all">ทั้งหมด</option></select>
-  <button class="btn bad" type="submit">ล้าง Audit log</button>
+  <button class="btn" type="submit">ล้างประวัติที่เลือก</button>
   <span class="sub">{{ 'ทุกบริษัท' if current_user.is_super else 'เฉพาะบริษัทของคุณ' }} · ระบบจะบันทึกไว้ 1 บรรทัดว่าใครล้าง</span>
 </form>
+</details>
 {% endif %}
-<div class="card" style="padding:0;overflow:hidden"><div class="scroll">
-<table class="t" style="min-width:860px">
-  <thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>งาน</th><th>การกระทำ</th><th>รายละเอียด</th></tr></thead>
-  <tbody>
+{% endblock %}
+{% block main %}
+<h1>ประวัติการใช้งาน</h1>
+<div class="sub" style="margin-bottom:14px">ใคร ทำอะไร กับงานไหน เมื่อไร</div>
+
+<div class="chips">
+  <a class="chip {{ 'on' if not show_all }}" href="?{{ 'user=' ~ who if who }}">สรุป (อ่านง่าย)</a>
+  <a class="chip {{ 'on' if show_all }}" href="?all=1{{ '&user=' ~ who if who }}">ทั้งหมดแบบละเอียด</a>
+  {% if who %}<a class="chip" href="?{{ 'all=1' if show_all }}">✕ ยกเลิกกรองผู้ใช้</a>{% endif %}
+  {% if not show_all and hidden > 0 %}<span class="hint">ซ่อนรายการย่อย เช่น เข้าสู่ระบบ / ดาวน์โหลด ไว้ {{ hidden }} รายการ</span>{% endif %}
+</div>
+<div class="card" style="padding:6px 18px">
+  {% set ns = namespace(day='') %}
   {% for r in rows %}
-  <tr><td class="sub" style="white-space:nowrap">{{ r.created_at|th }}</td>
-      <td><a href="?user={{ r.user_id }}">{{ r.user.name if r.user else '-' }}</a></td>
-      <td>{% if r.job_id and jobs.get(r.job_id) %}<a href="{{ url_for('main.job_view', job_id=r.job_id) }}">{{ jobs[r.job_id].link_name }}</a>{% elif r.job_id %}<span class="sub">(ลบแล้ว)</span>{% endif %}</td>
-      <td>{{ r.action }}</td><td>{{ r.detail }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table></div></div>
+    {% set day = r.when|th %}
+    {% if day[:10] != ns.day %}{% set ns.day = day[:10] %}<div class="tl-day">{{ ns.day }}</div>{% endif %}
+    <div class="tl">
+      <span class="tl-time">{{ day[11:] }}</span>
+      <span class="badge b-{{ r.tone }}">{{ r.label }}</span>
+      <span class="tl-text">{{ r.text }}{% if r.job_id %} <span class="hint">· {% if jobs.get(r.job_id) %}<a href="{{ url_for('main.job_view', job_id=r.job_id) }}">{{ jobs[r.job_id].link_name }}</a>{% else %}งานที่ลบแล้ว{% endif %}</span>{% endif %}</span>
+      <a class="tl-user" href="?user={{ r.user_id }}{{ '&all=1' if show_all }}">{{ r.user }}</a>
+    </div>
+  {% else %}<div class="empty">ยังไม่มีประวัติ</div>{% endfor %}
+</div>
+{% if current_user.role in ('superadmin','admin') %}
+<details class="adv" style="margin-top:14px"><summary>ล้างประวัติ</summary>
+<form method="post" action="{{ url_for('main.audit_clear') }}" class="row" style="margin:6px 0 0" onsubmit="return confirm('ล้าง Audit log ตามที่เลือก? กู้คืนไม่ได้')">
+  <input type="hidden" name="_csrf" value="{{ csrf }}">
+  <label class="vh" for="sc">ขอบเขต</label>
+  <select id="sc" name="scope" style="width:300px"><option value="noise">เฉพาะ login / ดาวน์โหลด / ย้ายรูป (ที่รก)</option><option value="old">ที่เก่ากว่า 30 วัน</option><option value="all">ทั้งหมด</option></select>
+  <button class="btn" type="submit">ล้างประวัติที่เลือก</button>
+  <span class="sub">{{ 'ทุกบริษัท' if current_user.is_super else 'เฉพาะบริษัทของคุณ' }} · ระบบจะบันทึกไว้ 1 บรรทัดว่าใครล้าง</span>
+</form>
+</details>
+{% endif %}
 {% endblock %}
