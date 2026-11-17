@@ -40,7 +40,10 @@
       <input type="hidden" name="_csrf" value="{{ csrf }}">
       <div style="margin-bottom:10px"><label for="link_name">Link Name</label><input id="link_name" name="link_name" type="text" value="{{ job.link_name }}" {{ 'disabled' if not can }}>
         <div class="sub" style="margin-top:3px">Site 1 = {{ s1 }} · Site 2 = {{ s2 }}</div></div>
-      {% macro fld(k, lbl) %}{% set parts = lbl.split(' — ') %}<div><label for="f_{{ k }}">{{ parts[0] }}</label><input id="f_{{ k }}" name="{{ k }}" type="text" value="{{ f.get(k,'') }}" {{ 'disabled' if not can }}>{% if parts|length > 1 %}<div class="hint">{{ parts[1] }}</div>{% endif %}</div>{% endmacro %}
+      {% macro fld(k, lbl) %}{% set parts = lbl.split(' — ') %}<div><label for="f_{{ k }}">{{ parts[0] }}</label>
+        {%- if k in OPTS %}<select id="f_{{ k }}" name="{{ k }}" class="dd" data-label="{{ parts[0] }}" {{ 'disabled' if not can }}><option value="">— เลือก —</option>{% for o in OPTS[k] %}<option value="{{ o }}" {{ 'selected' if f.get(k,'')==o }}>{{ o }}</option>{% endfor %}<option value="__new__">＋ เพิ่มค่าใหม่…</option></select>
+        {%- else %}<input id="f_{{ k }}" name="{{ k }}" type="text" value="{{ f.get(k,'') }}" {{ 'disabled' if not can }}>{% endif %}
+        {%- if parts|length > 1 %}<div class="hint">{{ parts[1] }}</div>{% endif %}</div>{% endmacro %}
       {% for title, items in FIELD_FORM %}
         <div class="grp">{{ title }}</div>
         <div class="grid g3">{% for k, lbl in items if k not in ADVANCED %}{{ fld(k, lbl) }}{% endfor %}</div>
@@ -216,6 +219,14 @@
 </div>
 {% endblock %}
 {% block scripts %}
+<script>
+// Dropdown: เลือก "เพิ่มค่าใหม่" แล้วเปลี่ยนเป็นช่องพิมพ์ (ค่าใหม่จะถูกจำไว้ให้เลือกในงานถัดไป)
+document.querySelectorAll('select.dd').forEach(sel=>sel.addEventListener('change',()=>{
+  if(sel.value!=='__new__') return;
+  const inp=document.createElement('input'); inp.type='text'; inp.name=sel.name; inp.id=sel.id; inp.placeholder='พิมพ์ '+sel.dataset.label+' ใหม่';
+  sel.replaceWith(inp); inp.focus();
+}));
+</script>
 <script>
 // แท็บย่อยของหน้างาน (จำแท็บล่าสุดไว้)
 (function(){

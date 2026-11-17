@@ -145,6 +145,23 @@ FIELD_FORM = [
     ("หน้า Deficiency", [("def_region", "Region — เช่น UPC1"), ("def_date", "Date — เว้นว่าง = วันที่ลงนาม Manager + 5 วัน"),
                          ("def_subcon", "Sub-Contractor name — เว้นว่าง = ชื่อบริษัท")]),
 ]
+DROPDOWN = {"core": "Core", "project": "Project (หน้าปก)", "activity": "Activity"}   # ช่องที่เป็น Dropdown
+SEED_OPTIONS = {"project": ["Rehoming Project"], "activity": ["Rehome Site Dtac"]}
+
+
+def field_options(company, current):
+    """ตัวเลือกของ Dropdown = รายการที่บริษัทตั้งไว้ + ค่าเริ่มต้น + ค่าที่งานนี้ใช้อยู่"""
+    saved = (company.defaults.get("options") or {}) if company else {}
+    out = {}
+    for k in DROPDOWN:
+        vals = list(saved.get(k) or [])
+        for v in SEED_OPTIONS.get(k, []) + [company.defaults.get(k, "") if company else "", current.get(k, "")]:
+            if v and v not in vals:
+                vals.append(v)
+        out[k] = vals
+    return out
+
+
 ADVANCED = {"inspect_project", "closures", "lb_aF", "lb_aE", "lb_NC", "lb_aC", "lb_otdr_max", "lb_otdr_min", "def_date", "def_subcon"}
 
 
@@ -164,7 +181,7 @@ def job_new():
         if not company:
             flash("กรุณาเลือกบริษัท", "error")
             return redirect(url_for("main.job_new"))
-        fields = {**DEFAULT_FIELDS, **company.defaults}
+        fields = {**DEFAULT_FIELDS, **{k: v for k, v in company.defaults.items() if k != "options"}}
         job = Job(company_id=company.id, link_name=link, created_by=current_user.id, updated_by=current_user.id)
         job.setj("fields", fields)
         db.session.add(job)
@@ -190,7 +207,7 @@ def job_view(job_id):
     hist = present.timeline(Audit.query.filter_by(job_id=job.id).order_by(Audit.created_at.desc()).limit(400).all())
     s1, s2 = sites_from_link(job.link_name)
     checks = [(lvl, msg, present.check_target(msg)) for lvl, msg in run_checks(job, pages, f, atts)]
-    return render_template("job.html", job=job, f=f, FIELD_FORM=FIELD_FORM, ADVANCED=ADVANCED, prog=prog, docs=docs, atts=atts, hist=hist,
+    return render_template("job.html", job=job, f=f, FIELD_FORM=FIELD_FORM, ADVANCED=ADVANCED, OPTS=field_options(job.company, f), prog=prog, docs=docs, atts=atts, hist=hist,
                            STATUS=STATUS, s1=s1, s2=s2, lb=link_budget(f), checks=checks, SIG_ROLES=SIG_ROLES,
                            sheet_cfg=job.j("sheet_cfg", {}), kmz=job.j("kmz", []), pages=pages,
                            coords=closure_coords(job), ai=vision.enabled(),
@@ -253,6 +270,19 @@ def job_fields(job_id):
                     f[k] = v
     job.setj("fields", f)
     job.updated_by = current_user.id
+    # ค่าใหม่ที่พิมพ์ใน Dropdown -> เพิ่มเข้ารายการของบริษัท ให้เลือกได้ในงานถัดไป
+    co = job.company
+    d = co.defaults
+    opts = d.get("options") or {}
+    learned = False
+    for k in DROPDOWN:
+        v = (f.get(k) or "").strip()
+        if v and v not in (opts.get(k) or []):
+            opts.setdefault(k, []).append(v)
+            learned = True
+    if learned:
+        d["options"] = opts
+        co.defaults_json = json.dumps(d, ensure_ascii=False)
     if changed:
         log("fields", "แก้ข้อมูล: " + ", ".join(changed), job)
     db.session.commit()
@@ -1185,7 +1215,18 @@ def companies():
         for k in ("project", "region", "activity", "equip1", "equip2"):
             if request.form.get("d_" + k) is not None:
                 defaults[k] = request.form.get("d_" + k).strip()
-        c.defaults_json = __import__("json").dumps(defaults, ensure_ascii=False)
+        opts = defaults.get("options") or {}
+        for k in DROPDOWN:
+            raw = request.form.get("opt_" + k)
+            if raw is not None:
+                seen = []
+                for line in raw.replace("\r", "").split("\n"):
+                    line = line.strip()
+                    if line and line not in seen:
+                        seen.append(line)
+                opts[k] = seen
+        defaults["options"] = opts
+        c.defaults_json = json.dumps(defaults, ensure_ascii=False)
         d = os.path.join(current_app.config["DATA_DIR"], "logos")
         os.makedirs(d, exist_ok=True)
         for field, attr in (("logo", "logo_path"), ("template_logo", "template_logo_path")):
@@ -1203,7 +1244,7 @@ def companies():
         flash("บันทึกแล้ว", "ok")
         return redirect(url_for("main.companies"))
     cs = Company.query.order_by(Company.name).all() if current_user.is_super else [current_user.company]
-    return render_template("companies.html", companies=cs)
+    return render_template("companies.html", companies=cs, DROPDOWN=DROPDOWN, SEED=SEED_OPTIONS)
 
 
 @bp.route("/logo/<int:cid>/<which>")

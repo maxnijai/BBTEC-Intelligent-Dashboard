@@ -163,3 +163,4 @@ a.ck:hover{background:#F8FAFC;color:#111827}
 .pill{font-weight:600}
 @media (max-width:760px){main{padding:16px}.tl{flex-wrap:wrap}.tl-user{width:100%;text-align:left}}
 .tl-text .hint a{color:#6B7280;text-decoration:none}.tl-text .hint a:hover{color:#1D4ED8;text-decoration:underline}
+select{appearance:auto;cursor:pointer}
