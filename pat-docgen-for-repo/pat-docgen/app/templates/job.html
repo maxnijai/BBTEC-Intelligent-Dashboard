@@ -20,10 +20,10 @@
     <form method="post" action="{{ url_for('main.job_import', job_id=job.id) }}" enctype="multipart/form-data" data-busy style="margin-top:10px">
       <input type="hidden" name="_csrf" value="{{ csrf }}">
       <div class="drop" id="drop">
-        <div style="font-weight:700">ลากไฟล์ ZIP มาวาง หรือเลือกไฟล์ / โฟลเดอร์</div>
+        <div style="font-weight:700">ลากไฟล์ ZIP / RAR มาวาง หรือเลือกไฟล์ / โฟลเดอร์</div>
         <div class="sub" style="margin:4px 0 10px">Import ซ้ำได้ — รูปใหม่จะเติมเฉพาะช่องที่ยังว่าง ไม่ทับช่องที่จัดไว้แล้ว</div>
         <div class="row" style="justify-content:center">
-          <label class="btn" for="zipf" style="margin:0">เลือกไฟล์ ZIP</label><input class="vh" id="zipf" name="zip" type="file" accept=".zip" onchange="this.form.requestSubmit()">
+          <label class="btn" for="zipf" style="margin:0">เลือกไฟล์ ZIP / RAR</label><input class="vh" id="zipf" name="zip" type="file" accept=".zip,.rar,.7z" onchange="this.form.requestSubmit()">
           <label class="btn" for="dirf" style="margin:0">เลือกทั้งโฟลเดอร์</label><input class="vh" id="dirf" name="zip" type="file" webkitdirectory multiple onchange="this.form.requestSubmit()">
         </div>
       </div>

@@ -44,7 +44,7 @@ DEFAULT_FIELDS = {
     "closures": "",   # "SJ#01,SJ#02,..." ว่าง = อ่านจาก KMZ / โฟลเดอร์
 }
 
-SITE_RX = re.compile(r"\b(D[A-Z]?_[A-Z]{2,4}\d{3,5})\b")
+SITE_RX = re.compile(r"\b([A-Z]{1,3}\d?_[A-Z]{2,4}\d{3,5})\b")   # D_PHE0020, DN_PHE1149, PN2_LPN3052, T_LPN0078 ...
 
 
 def sites_from_link(link_name):

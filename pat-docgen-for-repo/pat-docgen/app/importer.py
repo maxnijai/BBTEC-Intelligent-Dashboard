@@ -32,7 +32,7 @@ except Exception:  # pragma: no cover
 from .layout import site_code
 
 IMG_EXT = (".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp")
-CLOSURE_RX = re.compile(r"\b([SB]J)\s*#?\s*0*(\d{1,2})\b", re.I)
+CLOSURE_RX = re.compile(r"\b([SB]J)\s*#?\s*0*(\d{1,2})\b(?![.,]\d)", re.I)   # ไม่นับ "BJ 18.5922" (พิกัดใน KML)
 REVIEW_BELOW = 0.75
 
 # ---------------------------------------------------------------- KMZ
@@ -47,7 +47,7 @@ def parse_kmz(data):
     except zipfile.BadZipFile:
         text = data.decode("utf-8", "ignore")
     pts = []
-    for m in re.finditer(r"<Placemark>(.*?)</Placemark>", text, re.S):
+    for m in re.finditer(r"<Placemark\b[^>]*>(.*?)</Placemark>", text, re.S):
         body = m.group(1)
         name = re.search(r"<name>(.*?)</name>", body, re.S)
         pt = re.search(r"<Point>.*?<coordinates>\s*([-\d.]+),([-\d.]+)", body, re.S)
@@ -117,7 +117,8 @@ def features(path):
     # ความคมชัด (variance of Laplacian แบบง่าย) ใช้เตือนรูปเบลอ
     g = np.asarray(im.convert("L").filter(ImageFilter.FIND_EDGES)).astype(float)
     sharp = float(g.var())
-    return {"sky": sky, "white": white, "gray": gray, "sharp": sharp}
+    blue = float(((tb > tr + 25) & (tb > tg) & (tb > 130)).mean())   # ท้องฟ้าจริง (ไม่นับตู้สีขาว/เทา)
+    return {"sky": sky, "white": white, "gray": gray, "sharp": sharp, "blue": blue}
 
 
 def dhash(path):
@@ -240,11 +241,19 @@ def classify_path(rel, s1, s2):
         return ("closure", cl)
     if "PLANWORK" in joined or "PLAN_WORK" in joined or "PLAN WORK" in joined:
         return ("planwork", None)
-    if name.startswith("DESIGN") or "TOPO" in name or "TOPE" in name:
+    if name.startswith("DESIGN") or "TOPO" in name or "TOPE" in name or "DIAGRAM" in joined or "/DESIGN/" in "/" + joined:
         return ("design", None)
     if name.startswith("ROUTE"):
         return ("route", None)
-    site = 1 if c1 in joined else 2 if c2 in joined else None
+    # รหัส Site ดูจาก "ชื่อโฟลเดอร์" ก่อน (ชื่อไฟล์จาก LINE มักมีรหัสทั้ง 2 Site ปนอยู่)
+    dirs = "/".join(up[:-1])
+    site = 1 if c1 in dirs else 2 if c2 in dirs else None
+    if site is None:
+        for d in up[:-1]:   # โฟลเดอร์ที่เป็นรหัส Site อื่น (ไม่ใช่ 2 Site ของ Link นี้) -> ไม่เดาช่องให้
+            if re.fullmatch(r"(?:[A-Z]{1,3}\d?_)?[A-Z]{2,4}\d{3,5}", d):
+                return ("othersite", d)
+        in1, in2 = c1 in name, c2 in name
+        site = 1 if in1 and not in2 else 2 if in2 and not in1 else None
     if "PLUG" in joined:
         return ("plug", site)
     if "OTDR" in joined:
@@ -351,6 +360,49 @@ def place_unknown(photos, kmz_pts, s1, s2):
                 p["group"], p["sub"], p["gps_dist"] = g, sub, round(d)
 
 
+def to_zip_bytes(data, filename=""):
+    """รับ .zip / .rar / .7z -> คืน bytes ของ zip (ใช้ libarchive แปลงไฟล์ที่ไม่ใช่ zip)"""
+    if data[:2] == b"PK":
+        return data
+    try:
+        import libarchive
+    except Exception:
+        raise ValueError("เซิร์ฟเวอร์นี้ยังอ่านไฟล์ .rar / .7z ไม่ได้ — กรุณาบีบอัดเป็น .zip แล้วลองใหม่")
+    buf = io.BytesIO()
+    n = 0
+    try:
+        with libarchive.memory_reader(data) as arc, zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+            for e in arc:
+                name = e.pathname or ""
+                if e.isdir:
+                    z.writestr(name.rstrip("/") + "/", b"")
+                    continue
+                z.writestr(name, b"".join(e.get_blocks()))
+                n += 1
+    except Exception as ex:
+        raise ValueError(f"เปิดไฟล์ {filename or 'บีบอัด'} ไม่ได้ ({ex}) — ลองบีบอัดเป็น .zip")
+    if not n:
+        raise ValueError("ไม่พบไฟล์ในไฟล์บีบอัด")
+    return buf.getvalue()
+
+
+def _folder_date(name):
+    m = re.search(r"(\d{1,2})[-_.](\d{1,2})[-_.](\d{2,4})", name)
+    if m:
+        y = int(m.group(3))
+        return (0, y, int(m.group(2)), int(m.group(1)))
+    return (1, name)
+
+
+def set_rounds(photos):
+    """โฟลเดอร์ Site ที่แบ่งโฟลเดอร์ย่อย (เช่นตามวันที่) -> โฟลเดอร์แรก = รอบที่ 1, ถัดไป = รอบที่ 2"""
+    for k in (1, 2):
+        ps = [p for p in photos if p["group"] == "site" and p["sub"] == k]
+        dirs = sorted({os.path.dirname(p["rel"]) for p in ps}, key=lambda d: _folder_date(os.path.basename(d)))
+        for p in ps:
+            p["round"] = min(dirs.index(os.path.dirname(p["rel"])) + 1, 2) if len(dirs) > 1 else None
+
+
 def auto_assign(photos, closures):
     """วางรูปเข้าช่องตามกฎที่เรียนรู้จาก PAT ตัวอย่าง
     - ถ้ามีผล AI (p['kind']) ใช้ประเภทรูปจาก AI
@@ -392,26 +444,49 @@ def auto_assign(photos, closures):
             for idx, (role, c) in roles.items():
                 put(f"closure:{cl}:{role}", free[idx], c, "folder")
 
-    # ---- Site รอบที่ 1 (จากโฟลเดอร์ Site)
+    if not ai and not by("power"):   # หารูปจอ Power meter ที่ปนอยู่ในโฟลเดอร์ Site ก่อน (จะได้ไม่ไปลงช่อง ODF/Core)
+        cand = [p for p in by("site") if p["feat"]["sky"] < .15][:24]
+        for p in cand:
+            if p.get("kind") is None:
+                p["kind"] = guess_screen(p["path"])
+        if not any(p.get("kind") == "power_meter" for p in cand):
+            for p in [p for p in cand if p["feat"]["white"] > .38 and p["feat"]["sky"] < .12][:2]:
+                p["kind"] = "power_meter"
+
+    # ---- Site: ไม่มีโฟลเดอร์ย่อย -> รอบที่ 1; มีโฟลเดอร์ย่อย (ตามวันที่) -> โฟลเดอร์แรก = รอบ 1, ถัดไป = รอบ 2
+    set_rounds(photos)
     for k in (1, 2):
-        ps = by("site", k)
-        if ai:
-            used = set()
-            for role, kind in (("location", "site_location"), ("odf", "odf_rack"), ("core", "core_label")):
-                p, c = pick(ps, kind, used)
-                if p:
-                    used.add(p["id"])
-                    put(f"site{k}:r1:{role}", p, c, "ai")
-        if ps and f"site{k}:r1:location" not in assign:
-            loc = max(ps[:6], key=lambda p: p["feat"]["sky"])
-            put(f"site{k}:r1:location", loc, 0.8 if loc["feat"]["sky"] > .3 else .5, "folder")
-        rest = [p for p in ps if p["id"] not in assign.values()]
-        for role, p in zip(("odf", "core"), rest):
-            put(f"site{k}:r1:{role}", p, 0.55, "folder")
+        allk = by("site", k)
+        has_rounds = any(p.get("round") for p in allk)
+        for r in ((1, 2) if has_rounds else (1,)):
+            ps = [p for p in allk if p.get("round") == r] if has_rounds else allk
+            if ai:
+                used = set()
+                for role, kind in (("location", "site_location"), ("odf", "odf_rack"), ("core", "core_label")):
+                    p, c = pick(ps, kind, used)
+                    if p:
+                        used.add(p["id"])
+                        put(f"site{k}:r{r}:{role}", p, c, "ai")
+            if ps and f"site{k}:r{r}:location" not in assign:
+                sk = lambda p: p["feat"].get("blue", p["feat"]["sky"])
+                loc = max(ps if has_rounds else ps[:6], key=sk)
+                put(f"site{k}:r{r}:location", loc, 0.8 if sk(loc) > .3 else .5, "folder")
+            if not ai:
+                taken = {assign.get(f"site{k}:r{r}:location")}
+                rest = [p for p in ps if p["id"] not in taken and p.get("kind") not in ("power_meter", "otdr_screen")]
+                if has_rounds:   # รูปในตู้ (ไม่เห็นท้องฟ้า) มาก่อน
+                    rest.sort(key=lambda p: p["feat"].get("blue", p["feat"]["sky"]) > .15)
+                for role, p in zip(("odf", "core"), rest):
+                    put(f"site{k}:r{r}:{role}", p, 0.55, "folder")
 
     # ---- Plug Port (และ Site รอบที่ 2 = รูปชุดเดียวกับ Plug Port ตามตัวอย่าง)
     for k in (1, 2):
         ps = by("plug", k)
+        from_site = False
+        if not ps:  # ไม่มีโฟลเดอร์ PlugPort -> หารูปพอร์ต/ODF จากโฟลเดอร์ Site รอบล่าสุด (ต้องใช้ AI แยกประเภท)
+            sk = by("site", k)
+            ps = [p for p in sk if p.get("round") == 2] or sk
+            from_site = True
         if ai:
             used = set()
             for role, kind in (("location", "site_location"), ("port1", "equipment_port"), ("port2", "equipment_port"),
@@ -420,7 +495,7 @@ def auto_assign(photos, closures):
                 if p:
                     used.add(p["id"])
                     put(f"plug{k}:{role}", p, c, "ai")
-        elif ps:
+        elif ps and not from_site:
             loc = max(ps, key=lambda p: p["feat"]["sky"])
             if loc["feat"]["sky"] > .3:
                 put(f"plug{k}:location", loc, 0.7, "folder")
@@ -440,6 +515,19 @@ def auto_assign(photos, closures):
 
     # ---- Power: รูปเครื่องวัด 2 รูป ช่องที่ 3 = N/A
     pw = by("power")
+    pw_folder = bool(pw)
+    if not pw:  # ไม่มีโฟลเดอร์ Power -> หารูปหน้าจอ Power meter ในโฟลเดอร์ Site
+        cand = by("site")
+        if not ai:
+            cand = [p for p in cand if p["feat"]["sky"] < .15][:24]
+            for p in cand:
+                if p.get("kind") is None:
+                    p["kind"] = guess_screen(p["path"])
+        pw = [p for p in cand if p.get("kind") == "power_meter"]
+        if not pw and not ai:   # OCR อ่านจอไม่ออก -> เดาจากสี (จอ LCD ขาวกลางภาพ) ให้คนตรวจ
+            pw = [p for p in cand if p["feat"]["white"] > .38 and p["feat"]["sky"] < .12][:2]
+            for p in pw:
+                p["kind"] = "power_meter"
     if not ai:
         for p in pw:
             p.setdefault("kind", None)
@@ -447,7 +535,7 @@ def auto_assign(photos, closures):
                 p["kind"] = guess_screen(p["path"])
     pw = [p for p in pw if p.get("kind") in (None, "power_meter")]
     for i, p in enumerate(pw[:2], 1):
-        put(f"power:{i}", p, 0.9 if ai else 0.7, "ai" if ai else "folder")
+        put(f"power:{i}", p, 0.9 if ai else 0.7 if pw_folder else 0.5, "ai" if ai else "folder")
     put("power:3", "NA", 1.0, "rule")
 
     d = by("design")
@@ -492,7 +580,8 @@ def fiber_length_from_images(photos):
     return None
 
 
-def run_import(zip_bytes, job_dir, s1, s2):
+def run_import(zip_bytes, job_dir, s1, s2, filename=""):
+    zip_bytes = to_zip_bytes(zip_bytes, filename)
     photos, kmz_pts, sors, folders = extract_zip(zip_bytes, job_dir, s1, s2)
     place_unknown(photos, kmz_pts, s1, s2)
     closures = [norm_closure(n) for n, _, _ in kmz_pts if norm_closure(n)]

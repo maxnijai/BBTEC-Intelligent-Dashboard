@@ -20,9 +20,9 @@
   <div class="sub" id="sites" style="margin-bottom:14px">&nbsp;</div>
   <label for="zip">ไฟล์ ZIP รูปถ่าย (ไม่บังคับ — Import ทีหลังได้)</label>
   <div class="drop" id="drop">
-    <div style="font-weight:700;font-size:17px">ลากไฟล์ ZIP มาวาง หรือกดเลือก</div>
+    <div style="font-weight:700;font-size:17px">ลากไฟล์ ZIP / RAR มาวาง หรือกดเลือก</div>
     <div class="sub" style="margin:6px 0 12px">โครงโฟลเดอร์แนะนำ: PHE1149/ · PHE0020/ · Closure/SJ#01/ · PlugPort/PHE1149/ · Power/ · PlanWork/ · Design.jpg · *.kmz</div>
-    <input id="zip" name="zip" type="file" accept=".zip">
+    <input id="zip" name="zip" type="file" accept=".zip,.rar,.7z">
   </div>
   <div class="row" style="margin-top:16px"><button class="btn pri big" type="submit">สร้างงาน</button><span class="sub">ส่วนใหญ่เป็นเวลาอัปโหลด (ZIP 33 MB ≈ 30–60 วินาทีบนเน็ตทั่วไป) จัดรูปเองอีกประมาณ 5–15 วินาที</span></div>
 </form>
@@ -31,7 +31,7 @@
 {% block scripts %}
 <script>
 const ln=document.getElementById('ln'),out=document.getElementById('sites');
-if(ln)ln.addEventListener('input',()=>{const m=ln.value.match(/\bD[A-Z]?_[A-Z]{2,4}\d{3,5}\b/g)||[];out.textContent=m.length?('Site 1: '+(m[0]||'-')+'   ·   Site 2: '+(m[1]||'-')):' '});
+if(ln)ln.addEventListener('input',()=>{const m=ln.value.match(/\b[A-Z]{1,3}\d?_[A-Z]{2,4}\d{3,5}\b/g)||[];out.textContent=m.length?('Site 1: '+(m[0]||'-')+'   ·   Site 2: '+(m[1]||'-')):' '});
 const d=document.getElementById('drop'),inp=document.getElementById('zip');
 if(d){
 ['dragover','dragenter'].forEach(e=>d.addEventListener(e,ev=>{ev.preventDefault();d.classList.add('over')}));

@@ -462,7 +462,10 @@ def _store_sor(job, name, data):
 def do_import(job, data, filename):
     s1, s2 = sites_from_link(job.link_name)
     try:
-        res = run_import(data, os.path.join(job_dir(job), "photos"), s1, s2)
+        res = run_import(data, os.path.join(job_dir(job), "photos"), s1, s2, filename)
+    except ValueError as e:
+        flash(f"Import ไม่สำเร็จ: {e}", "error")
+        return
     except Exception as e:  # pragma: no cover
         current_app.logger.exception("import failed")
         flash(f"Import ไม่สำเร็จ: {e}", "error")
@@ -675,9 +678,9 @@ def job_import(job_id):
     job = get_job(job_id, edit=True)
     files = [f for f in request.files.getlist("zip") if f and f.filename]
     if not files:
-        flash("กรุณาเลือกไฟล์ ZIP", "error")
+        flash("กรุณาเลือกไฟล์ ZIP หรือ RAR", "error")
         return redirect(url_for("main.job_view", job_id=job.id))
-    if len(files) == 1 and files[0].filename.lower().endswith(".zip"):
+    if len(files) == 1 and files[0].filename.lower().endswith((".zip", ".rar", ".7z")):
         do_import(job, files[0].read(), files[0].filename)
     else:
         import zipfile
@@ -802,7 +805,7 @@ def job_photos(job_id):
     groups = {}
     for p in photos:
         label = {"site": "Site", "closure": "หัวต่อ", "plug": "Plug Port", "power": "Power", "planwork": "Planwork",
-                 "design": "Design", "route": "Route", "otdr": "OTDR", "unknown": "ไม่ทราบกลุ่ม"}.get(p.group, p.group)
+                 "design": "Design", "route": "Route", "otdr": "OTDR", "othersite": "Site อื่น", "unknown": "ไม่ทราบกลุ่ม"}.get(p.group, p.group)
         key = os.path.dirname(p.rel) or "(root)"
         groups.setdefault(key, {"label": label, "items": []})["items"].append(p)
     cfg = job.j("sheet_cfg", {})
